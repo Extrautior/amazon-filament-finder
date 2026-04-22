@@ -1,9 +1,9 @@
-const { MATERIALS } = require("./config");
-
 function exportRows(payload) {
-  return MATERIALS.flatMap((material) =>
-    (payload.resultsByMaterial[material] || []).map((item, index) => ({
-      material,
+  const sections = payload.searchPlan || Object.keys(payload.resultsByMaterial || {}).map((key) => ({ key, label: key }));
+
+  return sections.flatMap((section) =>
+    (payload.resultsByMaterial[section.key] || []).map((item, index) => ({
+      material: section.label,
       rank: index + 1,
       title: item.title,
       asin: item.asin || "",

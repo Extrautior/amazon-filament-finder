@@ -5,21 +5,32 @@ const { PORT } = require("./src/config");
 const { clearAuthCookie, isAuthenticated, setAuthCookie, validatePassword } = require("./src/auth");
 const { payloadToCsv } = require("./src/export");
 const logger = require("./src/logger");
-const { getSessionStatus, runSearch, SessionBusyError, SessionRequiredError } = require("./src/search");
+const { buildSearchPlan, getSessionStatus, runSearch, SessionBusyError, SessionRequiredError } = require("./src/search");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 let lastAsyncCrash = null;
 let latestSuccessfulPayload = null;
 let inflightSearch = null;
+let inflightSearchKey = null;
 let searchProgress = {
+  jobId: null,
   running: false,
   phase: "idle",
   percent: 0,
   activeMaterial: null,
   message: "Idle.",
   startedAt: null,
-  updatedAt: null
+  updatedAt: null,
+  latestPayloadJobId: null,
+  searchPlan: []
 };
+
+class SearchInProgressError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "SearchInProgressError";
+  }
+}
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -109,28 +120,65 @@ function setSearchProgress(update) {
   };
 }
 
-async function runHostedSearch() {
+function createJobId() {
+  return `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeSearchRequest(body) {
+  const materials = Array.isArray(body?.materials) ? body.materials : [];
+  const customTerm = typeof body?.customTerm === "string" ? body.customTerm : "";
+  return {
+    materials,
+    customTerm
+  };
+}
+
+function searchPlanKey(searchPlan) {
+  return JSON.stringify(searchPlan);
+}
+
+function startHostedSearch(searchRequest) {
+  const searchPlan = buildSearchPlan(searchRequest);
+  const nextSearchKey = searchPlanKey(searchPlan);
+
   if (inflightSearch) {
-    logger.info("search.deduped", { reason: "existing-search-in-flight" });
-    return inflightSearch;
+    if (inflightSearchKey === nextSearchKey) {
+      logger.info("search.deduped", { reason: "matching-search-in-flight" });
+      return {
+        jobId: searchProgress.jobId,
+        started: false,
+        deduped: true,
+        searchPlan: searchProgress.searchPlan
+      };
+    }
+
+    throw new SearchInProgressError("Another search is already running. Wait for it to finish and retry.");
   }
 
+  const jobId = createJobId();
   setSearchProgress({
+    jobId,
     running: true,
     phase: "queued",
     percent: 1,
     activeMaterial: null,
     message: "Search queued.",
-    startedAt: new Date().toISOString()
+    startedAt: new Date().toISOString(),
+    latestPayloadJobId: latestSuccessfulPayload ? latestSuccessfulPayload.jobId || null : null,
+    searchPlan
   });
 
+  inflightSearchKey = nextSearchKey;
   inflightSearch = (async () => {
     logger.info("search.start");
     try {
       const payload = await runSearch({
+        ...searchRequest,
         onProgress(update) {
           setSearchProgress({
+            jobId,
             running: true,
+            searchPlan,
             ...update
           });
         }
@@ -138,35 +186,48 @@ async function runHostedSearch() {
       const counts = Object.fromEntries(
         Object.entries(payload.resultsByMaterial).map(([material, items]) => [material, items.length])
       );
-      latestSuccessfulPayload = payload;
+      latestSuccessfulPayload = {
+        ...payload,
+        jobId
+      };
       logger.info("search.success", { counts, warningCount: payload.warnings.length });
-      return payload;
+      setSearchProgress({
+        latestPayloadJobId: jobId
+      });
     } catch (error) {
       logger.error("search.failure", {
         message: error instanceof Error ? error.message : String(error)
       });
       setSearchProgress({
+        jobId,
         running: false,
         phase: "error",
         activeMaterial: searchProgress.activeMaterial,
         message: error instanceof Error ? error.message : String(error)
       });
-      throw error;
     } finally {
       if (searchProgress.phase !== "error") {
         setSearchProgress({
+          jobId,
           running: false,
           phase: "complete",
           percent: 100,
           activeMaterial: null,
-          message: "Search complete."
+          message: "Search complete.",
+          latestPayloadJobId: latestSuccessfulPayload ? latestSuccessfulPayload.jobId || null : null
         });
       }
       inflightSearch = null;
+      inflightSearchKey = null;
     }
   })();
 
-  return inflightSearch;
+  return {
+    jobId,
+    started: true,
+    deduped: false,
+    searchPlan
+  };
 }
 
 const server = http.createServer((req, res) => {
@@ -199,6 +260,19 @@ const server = http.createServer((req, res) => {
         ...searchProgress,
         hasCachedResults: Boolean(latestSuccessfulPayload)
       });
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/api/latest-results") {
+      if (!requireAuth(req, res)) {
+        return;
+      }
+      if (!latestSuccessfulPayload) {
+        sendJson(res, 404, { error: "No successful search payload is cached yet" });
+        return;
+      }
+
+      sendJson(res, 200, latestSuccessfulPayload);
       return;
     }
 
@@ -238,20 +312,22 @@ const server = http.createServer((req, res) => {
       }
 
       try {
-        const results = await runHostedSearch();
-        if (lastAsyncCrash) {
-          results.warnings = [...(results.warnings || []), `Recovered async error: ${lastAsyncCrash}`];
-          lastAsyncCrash = null;
-        }
-        sendJson(res, 200, results);
+        const body = await readJsonBody(req);
+        const job = startHostedSearch(normalizeSearchRequest(body));
+        sendJson(res, 202, job);
       } catch (error) {
-        const statusCode = error instanceof SessionRequiredError || error instanceof SessionBusyError ? 409 : 500;
+        const statusCode =
+          error instanceof SessionRequiredError || error instanceof SessionBusyError || error instanceof SearchInProgressError
+            ? 409
+            : 500;
         sendJson(res, statusCode, {
           error:
             error instanceof SessionRequiredError
               ? "Amazon session requires reauthentication"
               : error instanceof SessionBusyError
                 ? "Amazon session is busy"
+                : error instanceof SearchInProgressError
+                  ? "Another search is already running"
                 : "Search failed",
           message: error instanceof Error ? error.message : String(error)
         });

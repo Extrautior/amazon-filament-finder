@@ -69,7 +69,9 @@ function materialMatches(material, title) {
     TPU: ["PLA", "PETG", "ABS"]
   };
 
-  return !exclusions[material].some((other) => {
+  const excludedMaterials = exclusions[material] || [];
+
+  return !excludedMaterials.some((other) => {
     if (material === "PLA" && /\bPLA\+\b/i.test(normalizedTitle) && other === "PLA") {
       return false;
     }

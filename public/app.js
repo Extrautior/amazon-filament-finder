@@ -16,9 +16,13 @@ const progressFillEl = document.getElementById("progress-fill");
 const progressLabelEl = document.getElementById("progress-label");
 const progressPercentEl = document.getElementById("progress-percent");
 const progressMetaEl = document.getElementById("progress-meta");
+const customSearchForm = document.getElementById("custom-search-form");
+const customSearchInput = document.getElementById("custom-search-term");
+const materialButtons = [...document.querySelectorAll(".material-search")];
 
-const MATERIALS = ["PLA", "PETG", "ABS", "TPU"];
 let searchProgressTimer = null;
+let activeSearchJobId = null;
+let resultFetchPending = false;
 
 function money(value, currency) {
   if (value == null) {
@@ -83,6 +87,11 @@ function setExportEnabled(enabled) {
 
 function setLockedState(locked) {
   button.disabled = locked;
+  for (const materialButton of materialButtons) {
+    materialButton.disabled = locked;
+  }
+  customSearchInput.disabled = locked;
+  customSearchForm.querySelector("button").disabled = locked;
   exportCsvButton.disabled = locked || exportCsvButton.disabled;
   exportJsonButton.disabled = locked || exportJsonButton.disabled;
 }
@@ -109,32 +118,13 @@ function renderSearchProgress(payload) {
         : "Waiting for the next search.";
 }
 
-async function refreshSearchProgress() {
-  try {
-    const response = await fetch("/api/search-status");
-    if (response.status === 401) {
-      stopSearchProgressPolling();
-      progressCardEl.hidden = true;
-      return;
-    }
-
-    const payload = await response.json();
-    renderSearchProgress(payload);
-
-    if (!payload.running) {
-      stopSearchProgressPolling();
-    }
-  } catch {
-    // Keep the existing UI state if the poll briefly fails.
+async function readJsonResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+  const text = await response.text();
+  if (!contentType.includes("application/json")) {
+    throw new Error("The server returned an unexpected non-JSON response.");
   }
-}
-
-function startSearchProgressPolling() {
-  stopSearchProgressPolling();
-  void refreshSearchProgress();
-  searchProgressTimer = window.setInterval(() => {
-    void refreshSearchProgress();
-  }, 1500);
+  return JSON.parse(text);
 }
 
 function openDownload(url) {
@@ -176,15 +166,15 @@ function cardForResult(item, index) {
   `;
 }
 
-function sectionForMaterial(material, items) {
+function sectionForMaterial(section, items) {
   const cards = items.length
     ? items.map((item, index) => cardForResult(item, index)).join("")
-    : `<p class="empty">No free-shipping ${material} results found.</p>`;
+    : `<p class="empty">No free-shipping ${escapeHtml(section.label)} results found.</p>`;
 
   return `
     <article class="material-card">
       <div class="material-header">
-        <h2>${material}</h2>
+        <h2>${escapeHtml(section.label)}</h2>
         <span>${items.length} result${items.length === 1 ? "" : "s"}</span>
       </div>
       <div class="result-grid">
@@ -214,7 +204,8 @@ function renderResults(payload) {
   metaEl.hidden = false;
   searchedAtEl.textContent = new Date(payload.searchedAt).toLocaleString();
   marketplaceEl.textContent = payload.marketplace;
-  resultsEl.innerHTML = MATERIALS.map((material) => sectionForMaterial(material, payload.resultsByMaterial[material] || [])).join("");
+  const sections = payload.searchPlan || Object.keys(payload.resultsByMaterial || {}).map((key) => ({ key, label: key }));
+  resultsEl.innerHTML = sections.map((section) => sectionForMaterial(section, payload.resultsByMaterial[section.key] || [])).join("");
   renderWarnings(payload.warnings || []);
   setExportEnabled(true);
 }
@@ -228,10 +219,10 @@ async function updateSessionState() {
       return false;
     }
 
-    const payload = await response.json();
+    const payload = await readJsonResponse(response);
     sessionStateEl.textContent = payload.status;
     loginForm.hidden = true;
-    if (payload.status !== "ready") {
+    if (!["ready", "busy"].includes(payload.status)) {
       renderWarnings([payload.message]);
     }
     return true;
@@ -248,13 +239,71 @@ async function login(password) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password })
   });
-  const payload = await response.json();
+  const payload = await readJsonResponse(response);
   if (!response.ok) {
     throw new Error(payload.error || payload.message || "Login failed");
   }
 }
 
-async function runSearch() {
+async function loadLatestResults() {
+  const response = await fetch("/api/latest-results");
+  const payload = await readJsonResponse(response);
+  if (!response.ok) {
+    throw new Error(payload.error || payload.message || "Could not load the latest results");
+  }
+  renderResults(payload);
+  statusEl.textContent = "Search complete.";
+}
+
+async function refreshSearchProgress() {
+  try {
+    const response = await fetch("/api/search-status");
+    if (response.status === 401) {
+      stopSearchProgressPolling();
+      progressCardEl.hidden = true;
+      return;
+    }
+
+    const payload = await readJsonResponse(response);
+    renderSearchProgress(payload);
+
+    if (!payload.running) {
+      stopSearchProgressPolling();
+
+      if (payload.phase === "error" && payload.jobId === activeSearchJobId) {
+        resultFetchPending = false;
+        statusEl.textContent = payload.message;
+        renderWarnings([payload.message]);
+        setLockedState(false);
+      }
+
+      if (
+        resultFetchPending &&
+        activeSearchJobId &&
+        payload.latestPayloadJobId === activeSearchJobId
+      ) {
+        resultFetchPending = false;
+        await loadLatestResults();
+        await updateSessionState();
+        setLockedState(false);
+      }
+    }
+  } catch (error) {
+    if (!resultFetchPending) {
+      renderWarnings([error.message]);
+    }
+  }
+}
+
+function startSearchProgressPolling() {
+  stopSearchProgressPolling();
+  void refreshSearchProgress();
+  searchProgressTimer = window.setInterval(() => {
+    void refreshSearchProgress();
+  }, 1500);
+}
+
+async function startSearch(searchRequest) {
   setLockedState(true);
   setExportEnabled(false);
   statusEl.textContent = "Searching Amazon. The shared browser session in the container is collecting prices now.";
@@ -264,11 +313,14 @@ async function runSearch() {
     activeMaterial: null,
     running: true
   });
-  startSearchProgressPolling();
 
   try {
-    const response = await fetch("/api/search", { method: "POST" });
-    const payload = await response.json();
+    const response = await fetch("/api/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(searchRequest)
+    });
+    const payload = await readJsonResponse(response);
     if (response.status === 401) {
       loginForm.hidden = false;
       throw new Error("Enter the shared password to continue.");
@@ -277,16 +329,16 @@ async function runSearch() {
       throw new Error(payload.message || payload.error || "Search failed");
     }
 
-    renderResults(payload);
-    await refreshSearchProgress();
-    await updateSessionState();
-    statusEl.textContent = "Search complete.";
+    activeSearchJobId = payload.jobId;
+    resultFetchPending = true;
+    renderWarnings([]);
+    startSearchProgressPolling();
   } catch (error) {
+    resultFetchPending = false;
+    setLockedState(false);
     statusEl.textContent = error.message;
     renderWarnings([error.message]);
     await refreshSearchProgress();
-  } finally {
-    button.disabled = false;
   }
 }
 
@@ -305,7 +357,27 @@ loginForm.addEventListener("submit", async (event) => {
   }
 });
 
-button.addEventListener("click", runSearch);
+button.addEventListener("click", () => {
+  void startSearch({ materials: ["PLA", "PETG", "ABS", "TPU"] });
+});
+
+for (const materialButton of materialButtons) {
+  materialButton.addEventListener("click", () => {
+    void startSearch({ materials: [materialButton.dataset.material] });
+  });
+}
+
+customSearchForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const customTerm = customSearchInput.value.trim();
+  if (!customTerm) {
+    statusEl.textContent = "Enter a custom search term first.";
+    return;
+  }
+
+  void startSearch({ customTerm });
+});
+
 logoutButton.addEventListener("click", async () => {
   await fetch("/api/logout", { method: "POST" });
   loginForm.hidden = false;

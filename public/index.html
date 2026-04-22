@@ -26,11 +26,27 @@
         </form>
 
         <div class="controls">
-          <button id="run-search">Search Amazon Filament</button>
+          <button id="run-search">Search All</button>
           <button id="export-csv" type="button" disabled>Export CSV</button>
           <button id="export-json" type="button" disabled>Export JSON</button>
           <button id="logout-button" type="button">Log Out</button>
           <p id="status">Ready.</p>
+        </div>
+        <div class="search-toolbar">
+          <div class="quick-searches">
+            <span class="toolbar-label">Quick searches</span>
+            <button class="material-search" data-material="PLA" type="button">PLA</button>
+            <button class="material-search" data-material="PETG" type="button">PETG</button>
+            <button class="material-search" data-material="ABS" type="button">ABS</button>
+            <button class="material-search" data-material="TPU" type="button">TPU</button>
+          </div>
+          <form id="custom-search-form" class="custom-search-form">
+            <label class="toolbar-label" for="custom-search-term">Custom term</label>
+            <div class="custom-search-row">
+              <input id="custom-search-term" name="custom-search-term" type="text" placeholder="ASA filament" />
+              <button id="run-custom-search" type="submit">Search Custom</button>
+            </div>
+          </form>
         </div>
         <section class="progress-card" id="progress-card" hidden>
           <div class="progress-head">

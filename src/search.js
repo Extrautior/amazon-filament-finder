@@ -44,6 +44,40 @@ function getChromium() {
   return require("playwright").chromium;
 }
 
+function slugify(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || `search-${Date.now()}`;
+}
+
+function buildSearchPlan(options = {}) {
+  const materials = Array.isArray(options.materials) ? options.materials.filter((material) => SEARCH_TERMS[material]) : [];
+  const customTerm = String(options.customTerm || "").trim();
+  const plan = [];
+
+  const selectedMaterials = materials.length ? materials : MATERIALS;
+  for (const material of selectedMaterials) {
+    plan.push({
+      key: material,
+      label: material,
+      query: SEARCH_TERMS[material]
+    });
+  }
+
+  if (customTerm) {
+    plan.push({
+      key: slugify(customTerm),
+      label: customTerm,
+      query: customTerm
+    });
+  }
+
+  return plan;
+}
+
 function buildSearchUrl(query) {
   const url = new URL(SEARCH_BASE_URL);
   url.searchParams.set("k", query);
@@ -320,12 +354,13 @@ async function collectSearchPageItems(page) {
   }
 }
 
-async function searchMaterial(context, material) {
+async function searchMaterial(context, searchTarget) {
   const page = await context.newPage();
   const warnings = [];
+  const material = searchTarget.label;
 
   try {
-    const query = SEARCH_TERMS[material];
+    const query = searchTarget.query;
     await page.goto(buildSearchUrl(query), { waitUntil: "domcontentloaded", timeout: DEFAULT_TIMEOUT_MS });
     await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
     await detectBlockingState(page, material);
@@ -404,6 +439,7 @@ function emitProgress(onProgress, update) {
 
 async function runSearch(options = {}) {
   const { onProgress } = options;
+  const searchPlan = buildSearchPlan(options);
   let context;
   try {
     emitProgress(onProgress, {
@@ -426,42 +462,37 @@ async function runSearch(options = {}) {
     }
 
     const warnings = [];
-    const resultsByMaterial = {
-      PLA: [],
-      PETG: [],
-      ABS: [],
-      TPU: []
-    };
+    const resultsByMaterial = Object.fromEntries(searchPlan.map((target) => [target.key, []]));
 
-    for (const [index, material] of MATERIALS.entries()) {
-      const basePercent = 18 + Math.floor((index / MATERIALS.length) * 72);
+    for (const [index, searchTarget] of searchPlan.entries()) {
+      const basePercent = 18 + Math.floor((index / searchPlan.length) * 72);
       emitProgress(onProgress, {
         phase: "material-start",
         percent: basePercent,
-        activeMaterial: material,
-        message: `Searching ${material} listings on Amazon.`
+        activeMaterial: searchTarget.label,
+        message: `Searching ${searchTarget.label} listings on Amazon.`
       });
 
       try {
-        const materialResults = await searchMaterial(context, material);
-        resultsByMaterial[material] = materialResults.results;
+        const materialResults = await searchMaterial(context, searchTarget);
+        resultsByMaterial[searchTarget.key] = materialResults.results;
         warnings.push(...materialResults.warnings);
         emitProgress(onProgress, {
           phase: "material-complete",
-          percent: 18 + Math.floor(((index + 1) / MATERIALS.length) * 72),
-          activeMaterial: material,
-          message: `Finished ${material}. Found ${materialResults.results.length} matching results.`
+          percent: 18 + Math.floor(((index + 1) / searchPlan.length) * 72),
+          activeMaterial: searchTarget.label,
+          message: `Finished ${searchTarget.label}. Found ${materialResults.results.length} matching results.`
         });
       } catch (error) {
         if (error instanceof SessionRequiredError) {
           throw error;
         }
-        warnings.push(`Search failed for ${material}: ${error instanceof Error ? error.message : String(error)}`);
+        warnings.push(`Search failed for ${searchTarget.label}: ${error instanceof Error ? error.message : String(error)}`);
         emitProgress(onProgress, {
           phase: "material-error",
-          percent: 18 + Math.floor(((index + 1) / MATERIALS.length) * 72),
-          activeMaterial: material,
-          message: `Finished ${material} with warnings.`
+          percent: 18 + Math.floor(((index + 1) / searchPlan.length) * 72),
+          activeMaterial: searchTarget.label,
+          message: `Finished ${searchTarget.label} with warnings.`
         });
       }
     }
@@ -476,6 +507,7 @@ async function runSearch(options = {}) {
     return {
       searchedAt: new Date().toISOString(),
       marketplace: DEFAULT_MARKETPLACE,
+      searchPlan,
       resultsByMaterial,
       warnings
     };
@@ -500,6 +532,7 @@ async function openSessionBrowser() {
 }
 
 module.exports = {
+  buildSearchPlan,
   SessionBusyError,
   SessionRequiredError,
   getSessionStatus,

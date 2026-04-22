@@ -117,6 +117,7 @@ test("payloadToCsv exports normalized result rows", () => {
     searchedAt: "2026-04-21T12:00:00.000Z",
     marketplace: "amazon.com",
     warnings: [],
+    searchPlan: [{ key: "PLA", label: "PLA", query: "PLA filament" }],
     resultsByMaterial: {
       PLA: [
         {
