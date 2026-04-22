@@ -1,15 +1,18 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { PORT } = require("./src/config");
+const { DATA_DIR, PORT } = require("./src/config");
 const { clearAuthCookie, isAuthenticated, setAuthCookie, validatePassword } = require("./src/auth");
 const { payloadToCsv } = require("./src/export");
 const logger = require("./src/logger");
 const { buildSearchPlan, getSessionStatus, runSearch, SessionBusyError, SessionRequiredError } = require("./src/search");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
+const SEARCH_HISTORY_FILE = path.join(DATA_DIR, "search-history.json");
+const MAX_PERSISTED_SEARCHES = 12;
 let lastAsyncCrash = null;
 let latestSuccessfulPayload = null;
+let persistedSearchHistory = [];
 let inflightSearch = null;
 let inflightSearchKey = null;
 let searchProgress = {
@@ -142,6 +145,70 @@ function searchPlanKey(searchPlan) {
   return JSON.stringify(searchPlan);
 }
 
+function searchHistorySummary(payload) {
+  const searchPlan = Array.isArray(payload.searchPlan) ? payload.searchPlan : [];
+  const labels = searchPlan.map((section) => section.label);
+  const resultCount = Object.values(payload.resultsByMaterial || {}).reduce((sum, items) => sum + items.length, 0);
+  const discountedCount = Object.values(payload.discountedResultsByMaterial || {}).reduce((sum, items) => sum + items.length, 0);
+
+  return {
+    jobId: payload.jobId || null,
+    searchedAt: payload.searchedAt || null,
+    marketplace: payload.marketplace || "amazon.com",
+    labels,
+    resultCount,
+    discountedCount
+  };
+}
+
+function saveSearchHistory() {
+  try {
+    fs.writeFileSync(SEARCH_HISTORY_FILE, JSON.stringify(persistedSearchHistory, null, 2));
+  } catch (error) {
+    logger.error("history.save_failure", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
+function loadSearchHistory() {
+  try {
+    if (!fs.existsSync(SEARCH_HISTORY_FILE)) {
+      return;
+    }
+
+    const raw = fs.readFileSync(SEARCH_HISTORY_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return;
+    }
+
+    persistedSearchHistory = parsed.filter((item) => item && typeof item === "object" && item.jobId);
+    latestSuccessfulPayload = persistedSearchHistory[0] || null;
+  } catch (error) {
+    logger.error("history.load_failure", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
+function storeSuccessfulPayload(payload) {
+  persistedSearchHistory = [
+    payload,
+    ...persistedSearchHistory.filter((item) => item.jobId !== payload.jobId)
+  ].slice(0, MAX_PERSISTED_SEARCHES);
+  latestSuccessfulPayload = persistedSearchHistory[0] || null;
+  saveSearchHistory();
+}
+
+function findPayload(jobId) {
+  if (!jobId) {
+    return latestSuccessfulPayload;
+  }
+
+  return persistedSearchHistory.find((item) => item.jobId === jobId) || null;
+}
+
 function startHostedSearch(searchRequest) {
   const searchPlan = buildSearchPlan(searchRequest);
   const nextSearchKey = searchPlanKey(searchPlan);
@@ -191,10 +258,11 @@ function startHostedSearch(searchRequest) {
       const counts = Object.fromEntries(
         Object.entries(payload.resultsByMaterial).map(([material, items]) => [material, items.length])
       );
-      latestSuccessfulPayload = {
+      const successfulPayload = {
         ...payload,
         jobId
       };
+      storeSuccessfulPayload(successfulPayload);
       logger.info("search.success", { counts, warningCount: payload.warnings.length });
       setSearchProgress({
         latestPayloadJobId: jobId
@@ -272,12 +340,24 @@ const server = http.createServer((req, res) => {
       if (!requireAuth(req, res)) {
         return;
       }
-      if (!latestSuccessfulPayload) {
+      const requestedPayload = findPayload(parsedUrl.searchParams.get("jobId"));
+      if (!requestedPayload) {
         sendJson(res, 404, { error: "No successful search payload is cached yet" });
         return;
       }
 
-      sendJson(res, 200, latestSuccessfulPayload);
+      sendJson(res, 200, requestedPayload);
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/api/search-history") {
+      if (!requireAuth(req, res)) {
+        return;
+      }
+
+      sendJson(res, 200, {
+        items: persistedSearchHistory.map((payload) => searchHistorySummary(payload))
+      });
       return;
     }
 
@@ -400,6 +480,8 @@ server.listen(PORT, () => {
   logger.info("server.start", { port: PORT });
   console.log(`Amazon Filament Finder running at http://localhost:${PORT}`);
 });
+
+loadSearchHistory();
 
 process.on("unhandledRejection", (reason) => {
   lastAsyncCrash = reason instanceof Error ? reason.message : String(reason);

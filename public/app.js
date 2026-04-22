@@ -9,6 +9,8 @@ const metaEl = document.getElementById("meta");
 const searchedAtEl = document.getElementById("searched-at");
 const marketplaceEl = document.getElementById("marketplace");
 const sessionStateEl = document.getElementById("session-state");
+const historyEl = document.getElementById("history");
+const historyListEl = document.getElementById("history-list");
 const exportCsvButton = document.getElementById("export-csv");
 const exportJsonButton = document.getElementById("export-json");
 const progressCardEl = document.getElementById("progress-card");
@@ -23,6 +25,7 @@ const materialButtons = [...document.querySelectorAll(".material-search")];
 let searchProgressTimer = null;
 let activeSearchJobId = null;
 let resultFetchPending = false;
+let selectedHistoryJobId = null;
 
 function apiUrl(pathname) {
   const url = new URL(pathname, window.location.origin);
@@ -149,6 +152,37 @@ async function readJsonResponse(response) {
 
 function openDownload(url) {
   window.location.assign(url);
+}
+
+function summarizeHistoryItem(item) {
+  const labels = Array.isArray(item.labels) && item.labels.length ? item.labels.join(", ") : "Search";
+  const searchedAt = item.searchedAt ? new Date(item.searchedAt).toLocaleString() : "Unknown time";
+  return `${labels} · ${item.resultCount} cheapest · ${item.discountedCount} discounted · ${searchedAt}`;
+}
+
+function renderHistory(items) {
+  if (!Array.isArray(items) || !items.length) {
+    historyEl.hidden = true;
+    historyListEl.innerHTML = "";
+    return;
+  }
+
+  historyEl.hidden = false;
+  historyListEl.innerHTML = items.map((item) => `
+    <button class="history-item${item.jobId === selectedHistoryJobId ? " active" : ""}" type="button" data-history-job-id="${escapeHtml(item.jobId)}">
+      <strong>${escapeHtml(Array.isArray(item.labels) && item.labels.length ? item.labels.join(", ") : "Saved search")}</strong>
+      <span>${escapeHtml(summarizeHistoryItem(item))}</span>
+    </button>
+  `).join("");
+
+  for (const historyButton of historyListEl.querySelectorAll("[data-history-job-id]")) {
+    historyButton.addEventListener("click", () => {
+      const { historyJobId } = historyButton.dataset;
+      if (historyJobId) {
+        void loadLatestResults(historyJobId);
+      }
+    });
+  }
 }
 
 function cardForResult(item, index) {
@@ -295,13 +329,28 @@ async function login(password) {
   }
 }
 
-async function loadLatestResults() {
-  const response = await apiFetch("/api/latest-results");
+async function loadSearchHistory() {
+  const response = await apiFetch("/api/search-history");
+  if (response.status === 401) {
+    historyEl.hidden = true;
+    return;
+  }
+  const payload = await readJsonResponse(response);
+  if (!response.ok) {
+    throw new Error(payload.error || payload.message || "Could not load recent searches");
+  }
+  renderHistory(payload.items || []);
+}
+
+async function loadLatestResults(jobId = null) {
+  const response = await apiFetch(jobId ? `/api/latest-results?jobId=${encodeURIComponent(jobId)}` : "/api/latest-results");
   const payload = await readJsonResponse(response);
   if (!response.ok) {
     throw new Error(payload.error || payload.message || "Could not load the latest results");
   }
+  selectedHistoryJobId = payload.jobId || jobId || null;
   renderResults(payload);
+  await loadSearchHistory();
   statusEl.textContent = "Search complete.";
 }
 
@@ -402,6 +451,8 @@ loginForm.addEventListener("submit", async (event) => {
     statusEl.textContent = "Unlocked.";
     loginForm.hidden = true;
     await updateSessionState();
+    await loadSearchHistory();
+    await loadLatestResults().catch(() => {});
   } catch (error) {
     statusEl.textContent = error.message;
   }
@@ -432,10 +483,19 @@ logoutButton.addEventListener("click", async () => {
   await apiFetch("/api/logout", { method: "POST" });
   loginForm.hidden = false;
   sessionStateEl.textContent = "Locked";
+  historyEl.hidden = true;
   statusEl.textContent = "Logged out.";
 });
 exportCsvButton.addEventListener("click", () => openDownload("/api/export.csv"));
 exportJsonButton.addEventListener("click", () => openDownload("/api/export.json"));
 
-void updateSessionState();
-void refreshSearchProgress();
+async function initializeApp() {
+  const unlocked = await updateSessionState();
+  if (unlocked) {
+    await loadSearchHistory().catch(() => {});
+    await loadLatestResults().catch(() => {});
+  }
+  await refreshSearchProgress();
+}
+
+void initializeApp();

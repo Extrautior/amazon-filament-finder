@@ -338,6 +338,56 @@ button:disabled {
   color: #236b2d;
 }
 
+.history {
+  margin-top: 28px;
+  padding: 22px 26px;
+  border-radius: 24px;
+  background: rgba(255, 251, 245, 0.82);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 50px rgba(95, 60, 24, 0.1);
+}
+
+.history-header h2 {
+  margin: 0 0 6px;
+}
+
+.history-header p {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+}
+
+.history-list {
+  display: grid;
+  gap: 12px;
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 248, 236, 0.95);
+  color: var(--ink);
+  box-shadow: 0 10px 24px rgba(95, 60, 24, 0.08);
+}
+
+.history-item.active {
+  border-color: rgba(188, 95, 46, 0.45);
+  background: linear-gradient(135deg, rgba(255, 240, 214, 0.98), rgba(248, 228, 188, 0.92));
+}
+
+.history-item span {
+  color: var(--muted);
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  line-height: 1.4;
+}
+
 .pill-deal {
   background: #fff1cf;
   color: #9a4f00;
