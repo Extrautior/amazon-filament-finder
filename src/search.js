@@ -58,13 +58,22 @@ function buildSearchPlan(options = {}) {
   const customTerm = String(options.customTerm || "").trim();
   const plan = [];
 
-  const selectedMaterials = materials.length ? materials : MATERIALS;
-  for (const material of selectedMaterials) {
-    plan.push({
-      key: material,
-      label: material,
-      query: SEARCH_TERMS[material]
-    });
+  if (materials.length) {
+    for (const material of materials) {
+      plan.push({
+        key: material,
+        label: material,
+        query: SEARCH_TERMS[material]
+      });
+    }
+  } else if (!customTerm) {
+    for (const material of MATERIALS) {
+      plan.push({
+        key: material,
+        label: material,
+        query: SEARCH_TERMS[material]
+      });
+    }
   }
 
   if (customTerm) {

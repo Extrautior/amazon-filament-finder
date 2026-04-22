@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { materialMatches, parsePrice, normalizeMaterialResults } = require("../src/amazonParser");
 const { payloadToCsv } = require("../src/export");
-const { isProfileLockError } = require("../src/search");
+const { buildSearchPlan, isProfileLockError } = require("../src/search");
 
 test("parsePrice extracts currency and value", () => {
   assert.deepEqual(parsePrice("$29.99"), { currency: "$", value: 29.99 });
@@ -152,4 +152,16 @@ test("isProfileLockError detects Chromium profile lock failures", () => {
     true
   );
   assert.equal(isProfileLockError(new Error("Random unrelated failure")), false);
+});
+
+test("buildSearchPlan uses only the custom term when no materials are selected", () => {
+  const plan = buildSearchPlan({ customTerm: "ASA filament" });
+
+  assert.deepEqual(plan, [
+    {
+      key: "asa-filament",
+      label: "ASA filament",
+      query: "ASA filament"
+    }
+  ]);
 });
