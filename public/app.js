@@ -283,6 +283,11 @@ function cardForResult(item, index) {
   `;
 }
 
+function gridClassName(itemCount, extraClassName = "") {
+  const layoutClass = itemCount >= 4 ? "result-grid-dense" : "result-grid-compact";
+  return ["result-grid", extraClassName, layoutClass].filter(Boolean).join(" ");
+}
+
 function sectionForMaterial(section, items) {
   const colorGroups = groupItemsByColor(items);
   const cards = items.length
@@ -295,7 +300,7 @@ function sectionForMaterial(section, items) {
             <h3>${escapeHtml(colorGroup.label)}</h3>
             <span>${colorGroup.items.length} result${colorGroup.items.length === 1 ? "" : "s"}</span>
           </div>
-          <div class="result-grid color-result-grid">
+          <div class="${gridClassName(colorGroup.items.length, "color-result-grid")}">
             ${colorGroup.items.map((item, index) => cardForResult(item, index)).join("")}
           </div>
         </section>
@@ -348,7 +353,7 @@ function discountSectionForMaterial(section, items) {
         <h2>${escapeHtml(section.label)} Discounted Deals</h2>
         <span>${items.length} result${items.length === 1 ? "" : "s"}</span>
       </div>
-      <div class="result-grid">
+      <div class="${gridClassName(items.length)}">
         ${cards}
       </div>
     </article>
