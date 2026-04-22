@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Amazon Filament Finder</title>
-    <link rel="stylesheet" href="/styles.css?v=13" />
+    <link rel="stylesheet" href="/styles.css?v=14" />
   </head>
   <body>
     <main class="shell">
@@ -118,21 +118,27 @@
 
       <section id="warnings" class="warnings" hidden></section>
       <section id="results-shell" class="results-shell" hidden>
-        <div class="results-shell-header">
-          <div>
-            <p class="toolbar-label">Result Navigator</p>
-            <h2>Browse Groups Side To Side</h2>
+        <aside class="results-sidebar">
+          <div class="results-sidebar-card">
+            <div class="results-shell-header">
+              <div>
+                <p class="toolbar-label">Result Navigator</p>
+                <h2>Browse Groups</h2>
+              </div>
+              <div class="results-nav">
+                <button id="results-prev" type="button" aria-label="Previous result group">←</button>
+                <span id="results-position" class="results-position">0 / 0</span>
+                <button id="results-next" type="button" aria-label="Next result group">→</button>
+              </div>
+            </div>
+            <div id="results-indicators" class="results-indicators"></div>
           </div>
-          <div class="results-nav">
-            <button id="results-prev" type="button" aria-label="Previous result group">←</button>
-            <span id="results-position" class="results-position">0 / 0</span>
-            <button id="results-next" type="button" aria-label="Next result group">→</button>
-          </div>
+        </aside>
+        <div class="results-main">
+          <section id="results" class="results"></section>
         </div>
-        <div id="results-indicators" class="results-indicators"></div>
-        <section id="results" class="results"></section>
       </section>
     </main>
-    <script src="/app.js?v=13"></script>
+    <script src="/app.js?v=14"></script>
   </body>
   </html>

@@ -420,11 +420,6 @@ async function searchMaterial(context, searchTarget) {
     await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
     await detectBlockingState(page, material);
 
-    const pageUrl = page.url();
-    if (!/p_n_is_free_shipping:10236242011/i.test(pageUrl)) {
-      warnings.push(`Amazon did not preserve the free-shipping filter for ${material}.`);
-    }
-
     let rawItems = await collectSearchPageItemsWithRetry(page, material);
     if (!rawItems.length) {
       warnings.push(`Amazon closed or replaced the ${material} results page before items could be collected.`);

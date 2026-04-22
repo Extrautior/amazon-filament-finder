@@ -307,7 +307,7 @@ function sectionForMaterial(section, items) {
 
   const colorJumpNav = colorGroups.length
     ? `
-      <div class="color-jump-nav">
+      <aside class="color-jump-nav">
         <span class="color-jump-label">Jump to color</span>
         <div class="color-jump-actions">
           ${colorGroups.map((colorGroup) => {
@@ -319,7 +319,7 @@ function sectionForMaterial(section, items) {
             `;
           }).join("")}
         </div>
-      </div>
+      </aside>
     `
     : "";
 
@@ -329,9 +329,11 @@ function sectionForMaterial(section, items) {
         <h2>${escapeHtml(section.label)} Cheapest Results</h2>
         <span>${items.length} result${items.length === 1 ? "" : "s"}</span>
       </div>
-      ${colorJumpNav}
-      <div class="color-groups">
+      <div class="material-layout${colorGroups.length ? " has-color-sidebar" : ""}">
+        ${colorJumpNav}
+        <div class="color-groups">
         ${cards}
+        </div>
       </div>
     </article>
   `;
@@ -356,7 +358,11 @@ function discountSectionForMaterial(section, items) {
 }
 
 function renderWarnings(warnings) {
-  if (!warnings.length) {
+  const visibleWarnings = (warnings || []).filter(
+    (warning) => !/did not preserve the free-shipping filter/i.test(String(warning || ""))
+  );
+
+  if (!visibleWarnings.length) {
     warningsEl.hidden = true;
     warningsEl.innerHTML = "";
     return;
@@ -366,7 +372,7 @@ function renderWarnings(warnings) {
   warningsEl.innerHTML = `
     <h2>Warnings</h2>
     <ul>
-      ${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}
+      ${visibleWarnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}
     </ul>
   `;
 }
@@ -403,7 +409,12 @@ function syncResultsCarousel() {
   });
 
   const activeCard = cards[currentResultIndex];
-  activeCard?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+  if (activeCard) {
+    resultsEl.scrollTo({
+      left: activeCard.offsetLeft,
+      behavior: "smooth"
+    });
+  }
 
   resultsPositionEl.textContent = `${currentResultIndex + 1} / ${total}`;
   resultsPrevButton.disabled = currentResultIndex === 0;
@@ -416,7 +427,10 @@ function syncResultsCarousel() {
       data-result-index="${index}"
       aria-label="Open ${escapeHtml(resultSlideLabel(card, index))}"
       title="${escapeHtml(resultSlideLabel(card, index))}"
-    ></button>
+    >
+      <span class="results-indicator-index">${index + 1}</span>
+      <span class="results-indicator-label">${escapeHtml(resultSlideLabel(card, index))}</span>
+    </button>
   `).join("");
 
   for (const indicator of resultsIndicatorsEl.querySelectorAll("[data-result-index]")) {
