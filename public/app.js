@@ -4,6 +4,11 @@ const loginForm = document.getElementById("login-form");
 const passwordInput = document.getElementById("password");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
+const resultsShellEl = document.getElementById("results-shell");
+const resultsPrevButton = document.getElementById("results-prev");
+const resultsNextButton = document.getElementById("results-next");
+const resultsPositionEl = document.getElementById("results-position");
+const resultsIndicatorsEl = document.getElementById("results-indicators");
 const warningsEl = document.getElementById("warnings");
 const metaEl = document.getElementById("meta");
 const searchedAtEl = document.getElementById("searched-at");
@@ -28,6 +33,7 @@ let searchProgressTimer = null;
 let activeSearchJobId = null;
 let resultFetchPending = false;
 let selectedHistoryJobId = null;
+let currentResultIndex = 0;
 
 const COLOR_GROUPS = [
   { label: "Black", pattern: /\bblack\b/i },
@@ -333,6 +339,72 @@ function renderWarnings(warnings) {
   `;
 }
 
+function resultSlideLabel(card, index) {
+  const title = card.querySelector(".material-header h2")?.textContent?.trim();
+  return title || `Group ${index + 1}`;
+}
+
+function resultCards() {
+  return [...resultsEl.querySelectorAll(".material-card")];
+}
+
+function syncResultsCarousel() {
+  const cards = resultCards();
+  const total = cards.length;
+  const hasResults = total > 0;
+
+  resultsShellEl.hidden = !hasResults;
+  if (!hasResults) {
+    resultsIndicatorsEl.innerHTML = "";
+    resultsPositionEl.textContent = "0 / 0";
+    resultsPrevButton.disabled = true;
+    resultsNextButton.disabled = true;
+    currentResultIndex = 0;
+    return;
+  }
+
+  currentResultIndex = Math.max(0, Math.min(currentResultIndex, total - 1));
+
+  cards.forEach((card, index) => {
+    card.dataset.slideIndex = String(index);
+    card.classList.toggle("is-active", index === currentResultIndex);
+  });
+
+  const activeCard = cards[currentResultIndex];
+  activeCard?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+
+  resultsPositionEl.textContent = `${currentResultIndex + 1} / ${total}`;
+  resultsPrevButton.disabled = currentResultIndex === 0;
+  resultsNextButton.disabled = currentResultIndex >= total - 1;
+
+  resultsIndicatorsEl.innerHTML = cards.map((card, index) => `
+    <button
+      class="results-indicator${index === currentResultIndex ? " active" : ""}"
+      type="button"
+      data-result-index="${index}"
+      aria-label="Open ${escapeHtml(resultSlideLabel(card, index))}"
+      title="${escapeHtml(resultSlideLabel(card, index))}"
+    ></button>
+  `).join("");
+
+  for (const indicator of resultsIndicatorsEl.querySelectorAll("[data-result-index]")) {
+    indicator.addEventListener("click", () => {
+      currentResultIndex = Number(indicator.dataset.resultIndex) || 0;
+      syncResultsCarousel();
+    });
+  }
+}
+
+function moveResultsCarousel(step) {
+  const total = resultCards().length;
+  if (!total) {
+    return;
+  }
+
+  currentResultIndex = Math.max(0, Math.min(currentResultIndex + step, total - 1));
+  syncResultsCarousel();
+}
+
 function renderResults(payload) {
   if (!payload || typeof payload !== "object" || !payload.resultsByMaterial || !Array.isArray(payload.searchPlan)) {
     throw new Error("The server returned an incomplete search result payload. Refresh and try again.");
@@ -354,6 +426,8 @@ function renderResults(payload) {
     const discountedSection = discountSectionForMaterial(section, payload.discountedResultsByMaterial?.[section.key] || []);
     return `${cheapestSection}${discountedSection}`;
   }).join("");
+  currentResultIndex = 0;
+  syncResultsCarousel();
   renderWarnings(payload.warnings || []);
   setExportEnabled(true);
 }
@@ -552,6 +626,8 @@ logoutButton.addEventListener("click", async () => {
 });
 exportCsvButton.addEventListener("click", () => openDownload("/api/export.csv"));
 exportJsonButton.addEventListener("click", () => openDownload("/api/export.json"));
+resultsPrevButton.addEventListener("click", () => moveResultsCarousel(-1));
+resultsNextButton.addEventListener("click", () => moveResultsCarousel(1));
 
 async function initializeApp() {
   const unlocked = await updateSessionState();
