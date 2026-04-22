@@ -760,6 +760,16 @@ function updateColorGroupCount(groupId, visibleCount) {
   }
 }
 
+function updateColorGroupLayout(colorGroup, visibleCount) {
+  const grid = colorGroup.querySelector(".color-result-grid");
+  if (!grid) {
+    return;
+  }
+
+  grid.classList.toggle("result-grid-dense", visibleCount >= 4);
+  grid.classList.toggle("result-grid-compact", visibleCount < 4);
+}
+
 function wireShadeFilters() {
   for (const shadeSelect of resultsEl.querySelectorAll("[data-shade-filter]")) {
     shadeSelect.addEventListener("change", () => {
@@ -786,6 +796,7 @@ function wireShadeFilters() {
       }
 
       updateColorGroupCount(groupId, visibleCount);
+      updateColorGroupLayout(colorGroup, visibleCount);
     });
   }
 }
