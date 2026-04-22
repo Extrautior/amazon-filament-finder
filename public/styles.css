@@ -59,9 +59,9 @@ input {
 .floating-panel {
   position: fixed;
   top: 118px;
+  bottom: 18px;
   z-index: 40;
   width: 220px;
-  max-height: calc(100vh - 136px);
   opacity: 0;
   pointer-events: none;
   transform: translateY(18px);
@@ -84,10 +84,11 @@ input {
 
 .floating-panel-card {
   display: grid;
+  grid-template-rows: auto 1fr;
   gap: 16px;
   padding: 18px;
-  max-height: 100%;
-  overflow-y: auto;
+  height: 100%;
+  min-height: 0;
   border-radius: var(--radius-lg);
   border: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(23, 29, 38, 0.96), rgba(20, 26, 35, 0.92));
@@ -95,18 +96,29 @@ input {
   box-shadow: var(--shadow-md);
 }
 
-.floating-panel-card::-webkit-scrollbar {
+.results-indicators-floating,
+.color-jump-actions-floating {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
+.results-indicators-floating::-webkit-scrollbar,
+.color-jump-actions-floating::-webkit-scrollbar {
   width: 10px;
 }
 
-.floating-panel-card::-webkit-scrollbar-thumb {
+.results-indicators-floating::-webkit-scrollbar-thumb,
+.color-jump-actions-floating::-webkit-scrollbar-thumb {
   border-radius: 999px;
   border: 2px solid transparent;
   background: rgba(167, 176, 188, 0.32);
   background-clip: padding-box;
 }
 
-.floating-panel-card::-webkit-scrollbar-track {
+.results-indicators-floating::-webkit-scrollbar-track,
+.color-jump-actions-floating::-webkit-scrollbar-track {
   background: transparent;
 }
 
