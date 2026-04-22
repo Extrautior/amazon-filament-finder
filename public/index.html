@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Amazon Filament Finder</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Amazon.com to Israel</p>
+        <h1>Amazon Filament Finder</h1>
+        <p class="lede">
+          Search live Amazon listings for PLA, PETG, ABS, and TPU filament that can ship to Israel, then sort by the
+          cheapest delivered cost.
+        </p>
+        <div class="controls">
+          <button id="run-search">Search Amazon Filament</button>
+          <button id="export-csv" type="button" disabled>Export CSV</button>
+          <button id="export-json" type="button" disabled>Export JSON</button>
+          <p id="status">Ready.</p>
+        </div>
+        <p class="hint">
+          Tip: keep your Amazon delivery destination set to Israel in the same browser profile this app uses.
+        </p>
+      </section>
+
+      <section class="meta" id="meta" hidden>
+        <div>
+          <span class="meta-label">Marketplace</span>
+          <strong id="marketplace">amazon.com</strong>
+        </div>
+        <div>
+          <span class="meta-label">Last searched</span>
+          <strong id="searched-at">-</strong>
+        </div>
+        <div>
+          <span class="meta-label">Filter</span>
+          <strong>Free shipping only</strong>
+        </div>
+      </section>
+
+      <section id="warnings" class="warnings" hidden></section>
+      <section id="results" class="results"></section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+  </html>

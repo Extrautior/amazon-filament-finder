@@ -1,0 +1,16 @@
+{
+  "name": "amazon-filament-finder",
+  "version": "1.0.0",
+  "description": "Local web app that searches Amazon.com for Israel-shippable 3D printer filament deals.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "playwright": "^1.54.2"
+  }
+}
