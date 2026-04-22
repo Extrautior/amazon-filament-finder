@@ -61,6 +61,16 @@ input {
   top: 118px;
   z-index: 40;
   width: 220px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(18px);
+  transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+.floating-panel.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .floating-panel-left {

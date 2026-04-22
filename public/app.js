@@ -32,6 +32,7 @@ let activeSearchJobId = null;
 let resultFetchPending = false;
 let selectedHistoryJobId = null;
 let currentResultIndex = 0;
+let floatingMenusEnabled = false;
 
 const COLOR_GROUPS = [
   { label: "Black", pattern: /\bblack\b/i },
@@ -393,10 +394,23 @@ function currentResultCard() {
   return resultCards()[currentResultIndex] || null;
 }
 
+function updateFloatingMenuVisibility() {
+  const hasResults = !resultsShellEl.hidden && resultCards().length > 0;
+  const shellRect = resultsShellEl.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const inView = hasResults && shellRect.top < viewportHeight - 120 && shellRect.bottom > 220;
+  const enabled = Boolean(inView);
+
+  floatingMenusEnabled = enabled;
+  floatingResultsNavEl.classList.toggle("is-visible", enabled && !floatingResultsNavEl.hidden);
+  floatingColorNavEl.classList.toggle("is-visible", enabled && !floatingColorNavEl.hidden);
+}
+
 function renderFloatingResultsNav(cards) {
   if (!cards.length) {
     floatingResultsNavEl.hidden = true;
     floatingResultsNavEl.innerHTML = "";
+    floatingResultsNavEl.classList.remove("is-visible");
     return;
   }
 
@@ -428,12 +442,15 @@ function renderFloatingResultsNav(cards) {
       syncResultsCarousel();
     });
   }
+
+  updateFloatingMenuVisibility();
 }
 
 function renderFloatingColorNav(activeCard) {
   if (!activeCard) {
     floatingColorNavEl.hidden = true;
     floatingColorNavEl.innerHTML = "";
+    floatingColorNavEl.classList.remove("is-visible");
     return;
   }
 
@@ -441,6 +458,7 @@ function renderFloatingColorNav(activeCard) {
   if (!jumpButtons.length) {
     floatingColorNavEl.hidden = true;
     floatingColorNavEl.innerHTML = "";
+    floatingColorNavEl.classList.remove("is-visible");
     return;
   }
 
@@ -459,6 +477,8 @@ function renderFloatingColorNav(activeCard) {
       </div>
     </div>
   `;
+
+  updateFloatingMenuVisibility();
 }
 
 function syncResultsCarousel() {
@@ -471,6 +491,7 @@ function syncResultsCarousel() {
     renderFloatingResultsNav([]);
     renderFloatingColorNav(null);
     currentResultIndex = 0;
+    updateFloatingMenuVisibility();
     return;
   }
 
@@ -491,6 +512,7 @@ function syncResultsCarousel() {
 
   renderFloatingResultsNav(cards);
   renderFloatingColorNav(activeCard);
+  updateFloatingMenuVisibility();
 }
 
 function moveResultsCarousel(step) {
@@ -750,6 +772,8 @@ floatingColorNavEl.addEventListener("click", (event) => {
 
   target.scrollIntoView({ behavior: "smooth", block: "start" });
 });
+window.addEventListener("scroll", updateFloatingMenuVisibility, { passive: true });
+window.addEventListener("resize", updateFloatingMenuVisibility);
 
 async function initializeApp() {
   const unlocked = await updateSessionState();
@@ -758,6 +782,7 @@ async function initializeApp() {
     await loadLatestResults().catch(() => {});
   }
   await refreshSearchProgress();
+  updateFloatingMenuVisibility();
 }
 
 void initializeApp();
