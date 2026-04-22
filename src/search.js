@@ -420,7 +420,7 @@ async function searchMaterial(context, searchTarget) {
       }
     }
 
-    const results = normalizeMaterialResults(material, rawItems.map((item) => ({
+    const materialResults = normalizeMaterialResults(material, rawItems.map((item) => ({
       ...item,
       url: item.asin ? `https://www.amazon.com/dp/${item.asin}` : resolveAmazonUrl(item.url)
     })), {
@@ -429,12 +429,13 @@ async function searchMaterial(context, searchTarget) {
       filteredEligible: true
     });
 
-    if (!results.length) {
+    if (!materialResults.results.length) {
       warnings.push(`Zero parseable ${material} results remained after filtering.`);
     }
 
     return {
-      results,
+      results: materialResults.results,
+      discountedResults: materialResults.discountedResults,
       warnings
     };
   } finally {
