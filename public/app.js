@@ -24,6 +24,26 @@ let searchProgressTimer = null;
 let activeSearchJobId = null;
 let resultFetchPending = false;
 
+function apiUrl(pathname) {
+  const url = new URL(pathname, window.location.origin);
+  url.searchParams.set("_ts", String(Date.now()));
+  return url.toString();
+}
+
+async function apiFetch(pathname, options = {}) {
+  const headers = {
+    Accept: "application/json",
+    ...(options.headers || {})
+  };
+
+  return fetch(apiUrl(pathname), {
+    cache: "no-store",
+    credentials: "include",
+    ...options,
+    headers
+  });
+}
+
 function money(value, currency) {
   if (value == null) {
     return "N/A";
@@ -201,10 +221,16 @@ function renderWarnings(warnings) {
 }
 
 function renderResults(payload) {
+  if (!payload || typeof payload !== "object" || !payload.resultsByMaterial || !Array.isArray(payload.searchPlan)) {
+    throw new Error("The server returned an incomplete search result payload. Refresh and try again.");
+  }
+
   metaEl.hidden = false;
   searchedAtEl.textContent = new Date(payload.searchedAt).toLocaleString();
   marketplaceEl.textContent = payload.marketplace;
-  const sections = payload.searchPlan || Object.keys(payload.resultsByMaterial || {}).map((key) => ({ key, label: key }));
+  const sections = payload.searchPlan.length
+    ? payload.searchPlan
+    : Object.keys(payload.resultsByMaterial).map((key) => ({ key, label: key }));
   resultsEl.innerHTML = sections.map((section) => sectionForMaterial(section, payload.resultsByMaterial[section.key] || [])).join("");
   renderWarnings(payload.warnings || []);
   setExportEnabled(true);
@@ -212,7 +238,7 @@ function renderResults(payload) {
 
 async function updateSessionState() {
   try {
-    const response = await fetch("/admin/session-status");
+    const response = await apiFetch("/admin/session-status");
     if (response.status === 401) {
       sessionStateEl.textContent = "Locked";
       loginForm.hidden = false;
@@ -234,7 +260,7 @@ async function updateSessionState() {
 }
 
 async function login(password) {
-  const response = await fetch("/api/login", {
+  const response = await apiFetch("/api/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password })
@@ -246,7 +272,7 @@ async function login(password) {
 }
 
 async function loadLatestResults() {
-  const response = await fetch("/api/latest-results");
+  const response = await apiFetch("/api/latest-results");
   const payload = await readJsonResponse(response);
   if (!response.ok) {
     throw new Error(payload.error || payload.message || "Could not load the latest results");
@@ -257,7 +283,7 @@ async function loadLatestResults() {
 
 async function refreshSearchProgress() {
   try {
-    const response = await fetch("/api/search-status");
+    const response = await apiFetch("/api/search-status");
     if (response.status === 401) {
       stopSearchProgressPolling();
       progressCardEl.hidden = true;
@@ -315,7 +341,7 @@ async function startSearch(searchRequest) {
   });
 
   try {
-    const response = await fetch("/api/search", {
+    const response = await apiFetch("/api/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(searchRequest)
@@ -379,7 +405,7 @@ customSearchForm.addEventListener("submit", (event) => {
 });
 
 logoutButton.addEventListener("click", async () => {
-  await fetch("/api/logout", { method: "POST" });
+  await apiFetch("/api/logout", { method: "POST" });
   loginForm.hidden = false;
   sessionStateEl.textContent = "Locked";
   statusEl.textContent = "Logged out.";

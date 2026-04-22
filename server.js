@@ -43,6 +43,7 @@ const MIME_TYPES = {
 function sendJson(res, statusCode, payload, headers = {}) {
   res.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store, max-age=0",
     ...headers
   });
   res.end(JSON.stringify(payload));
@@ -51,6 +52,7 @@ function sendJson(res, statusCode, payload, headers = {}) {
 function sendText(res, statusCode, contentType, body, headers = {}) {
   res.writeHead(statusCode, {
     "Content-Type": contentType,
+    "Cache-Control": "no-store, max-age=0",
     ...headers
   });
   res.end(body);
@@ -64,7 +66,10 @@ function sendFile(res, filePath) {
       sendJson(res, 404, { error: "File not found" });
       return;
     }
-    res.writeHead(200, { "Content-Type": contentType });
+    res.writeHead(200, {
+      "Content-Type": contentType,
+      "Cache-Control": "no-store, max-age=0"
+    });
     res.end(data);
   });
 }
