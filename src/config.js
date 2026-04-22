@@ -49,7 +49,7 @@ module.exports = {
   SEARCH_TERMS,
   APP_PASSWORD: process.env.APP_PASSWORD || "",
   PORT: numberFromEnv("PORT", 3017),
-  RESULT_LIMIT: numberFromEnv("RESULT_LIMIT", 10),
+  RESULT_LIMIT: numberFromEnv("RESULT_LIMIT", 20),
   DEFAULT_TIMEOUT_MS: numberFromEnv("SEARCH_TIMEOUT_MS", 30000),
   DATA_DIR,
   AMAZON_SESSION_DIR,

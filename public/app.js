@@ -159,10 +159,12 @@ function cardForResult(item, index) {
       <div class="result-top">
         <span class="result-rank">#${index + 1}</span>
         <span class="pill pill-free">Free shipping</span>
+        ${item.hasDiscount ? `<span class="pill pill-deal">${escapeHtml(item.discountPercent != null ? `Save ${item.discountPercent}%` : "Discount")}</span>` : ""}
       </div>
       ${imageUrl ? `<div class="result-image-wrap"><img class="result-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" /></div>` : ""}
       <h3><a href="${escapeHtml(amazonUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a></h3>
       <p class="result-note">${escapeHtml(shortNote(item.availabilityNote))}</p>
+      ${item.hasDiscount && item.discountText ? `<p class="result-note">${escapeHtml(item.discountText)}</p>` : ""}
       <dl class="result-metrics">
         <div>
           <dt>Item</dt>
@@ -194,7 +196,25 @@ function sectionForMaterial(section, items) {
   return `
     <article class="material-card">
       <div class="material-header">
-        <h2>${escapeHtml(section.label)}</h2>
+        <h2>${escapeHtml(section.label)} Cheapest Results</h2>
+        <span>${items.length} result${items.length === 1 ? "" : "s"}</span>
+      </div>
+      <div class="result-grid">
+        ${cards}
+      </div>
+    </article>
+  `;
+}
+
+function discountSectionForMaterial(section, items) {
+  const cards = items.length
+    ? items.map((item, index) => cardForResult(item, index)).join("")
+    : `<p class="empty">No discounted ${escapeHtml(section.label)} deals found.</p>`;
+
+  return `
+    <article class="material-card">
+      <div class="material-header">
+        <h2>${escapeHtml(section.label)} Discounted Deals</h2>
         <span>${items.length} result${items.length === 1 ? "" : "s"}</span>
       </div>
       <div class="result-grid">
@@ -231,7 +251,11 @@ function renderResults(payload) {
   const sections = payload.searchPlan.length
     ? payload.searchPlan
     : Object.keys(payload.resultsByMaterial).map((key) => ({ key, label: key }));
-  resultsEl.innerHTML = sections.map((section) => sectionForMaterial(section, payload.resultsByMaterial[section.key] || [])).join("");
+  resultsEl.innerHTML = sections.map((section) => {
+    const cheapestSection = sectionForMaterial(section, payload.resultsByMaterial[section.key] || []);
+    const discountedSection = discountSectionForMaterial(section, payload.discountedResultsByMaterial?.[section.key] || []);
+    return `${cheapestSection}${discountedSection}`;
+  }).join("");
   renderWarnings(payload.warnings || []);
   setExportEnabled(true);
 }

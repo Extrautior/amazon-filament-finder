@@ -49,6 +49,20 @@ function cleanText(text) {
   return (text || "").replace(/\s+/g, " ").trim();
 }
 
+function parseDiscountPercent(text) {
+  const normalized = cleanText(text);
+  const match = normalized.match(/(?:save|extra)\s+(\d+)%|(\d+)%\s+off/i);
+  if (!match) {
+    return null;
+  }
+
+  return Number(match[1] || match[2]);
+}
+
+function hasDiscountSignal(text) {
+  return /save\s+\d+%|extra\s+\d+%|\d+%\s+off|coupon|discount|at checkout/i.test(cleanText(text));
+}
+
 function materialMatches(material, title) {
   const normalizedTitle = cleanText(title).toUpperCase();
   const exact = new RegExp(`\\b${material}\\b`, "i");
@@ -95,12 +109,15 @@ function computeTotal(priceValue, shippingValue, importFeesValue) {
 function normalizeResult(material, raw, options = {}) {
   const title = cleanText(raw.title || "");
   const availabilityNote = cleanText([raw.shippingText, raw.deliveryText, raw.badgeText].filter(Boolean).join(" | "));
+  const discountText = cleanText(raw.discountText || "");
   const shipping = parsePrice(cleanText(raw.shippingText));
   const importFees = parsePrice(cleanText(raw.importFeesText));
   const productPrice = parsePrice(cleanText(raw.priceText));
   const destinationConfirmed = options.destinationConfirmed !== false;
   const freeShippingMode = options.freeShippingMode === true;
   const filteredEligible = options.filteredEligible === true;
+  const discountPercent = parseDiscountPercent(discountText);
+  const hasDiscount = hasDiscountSignal(discountText);
 
   const freeShipping =
     filteredEligible ||
@@ -129,6 +146,9 @@ function normalizeResult(material, raw, options = {}) {
     currency: productPrice ? productPrice.currency : shipping ? shipping.currency : importFees ? importFees.currency : "$",
     shipsToIsrael,
     freeShipping,
+    hasDiscount,
+    discountText,
+    discountPercent,
     availabilityNote: availabilityNote || "No shipping note found.",
     sourcePage: raw.sourcePage || "search",
     capturedAt: raw.capturedAt
@@ -164,21 +184,64 @@ function dedupeAndSort(results) {
     .slice(0, RESULT_LIMIT);
 }
 
+function dedupeAndSortDiscounted(results) {
+  const deduped = new Map();
+
+  for (const result of results) {
+    const key = result.asin || `${result.material}:${result.title.toLowerCase()}`;
+    const existing = deduped.get(key);
+    if (
+      !existing ||
+      (result.discountPercent ?? -1) > (existing.discountPercent ?? -1) ||
+      (
+        (result.discountPercent ?? -1) === (existing.discountPercent ?? -1) &&
+        (result.priceValue ?? Number.POSITIVE_INFINITY) < (existing.priceValue ?? Number.POSITIVE_INFINITY)
+      )
+    ) {
+      deduped.set(key, result);
+    }
+  }
+
+  return [...deduped.values()]
+    .sort((a, b) => {
+      const percentDelta = (b.discountPercent ?? -1) - (a.discountPercent ?? -1);
+      if (percentDelta !== 0) {
+        return percentDelta;
+      }
+      const aMissingPrice = a.priceValue == null ? 1 : 0;
+      const bMissingPrice = b.priceValue == null ? 1 : 0;
+      if (aMissingPrice !== bMissingPrice) {
+        return aMissingPrice - bMissingPrice;
+      }
+      if (a.priceValue !== b.priceValue) {
+        return (a.priceValue ?? Number.POSITIVE_INFINITY) - (b.priceValue ?? Number.POSITIVE_INFINITY);
+      }
+      return a.title.localeCompare(b.title);
+    })
+    .slice(0, RESULT_LIMIT);
+}
+
 function normalizeMaterialResults(material, rawResults, options = {}) {
-  return dedupeAndSort(
-    rawResults
-      .filter((item) => materialMatches(material, item.title))
-      .map((item) => normalizeResult(material, item, options))
-      .filter((item) => item.shipsToIsrael)
-      .filter((item) => ((options.freeShippingMode && !options.filteredEligible) ? item.freeShipping : true))
-  );
+  const eligibleResults = rawResults
+    .filter((item) => materialMatches(material, item.title))
+    .map((item) => normalizeResult(material, item, options))
+    .filter((item) => item.shipsToIsrael)
+    .filter((item) => ((options.freeShippingMode && !options.filteredEligible) ? item.freeShipping : true));
+
+  return {
+    results: dedupeAndSort(eligibleResults),
+    discountedResults: dedupeAndSortDiscounted(eligibleResults.filter((item) => item.hasDiscount))
+  };
 }
 
 module.exports = {
   computeTotal,
   dedupeAndSort,
+  dedupeAndSortDiscounted,
   extractAsin,
+  hasDiscountSignal,
   materialMatches,
   normalizeMaterialResults,
+  parseDiscountPercent,
   parsePrice
 };

@@ -338,6 +338,11 @@ button:disabled {
   color: #236b2d;
 }
 
+.pill-deal {
+  background: #fff1cf;
+  color: #9a4f00;
+}
+
 .result-card h3 {
   margin: 14px 0 10px;
   font-size: 1.15rem;

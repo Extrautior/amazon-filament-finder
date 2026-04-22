@@ -336,6 +336,9 @@ async function collectSearchPageItems(page) {
         const badgeEl = [...card.querySelectorAll("span")].find((node) =>
           /free shipping|free delivery|delivery/i.test(node.textContent || "")
         );
+        const discountEl = [...card.querySelectorAll("span, div")].find((node) =>
+          /save\s+\d+%|extra\s+\d+%|\d+%\s+off|coupon|discount|at checkout/i.test(node.textContent || "")
+        );
 
         const href = linkEl ? linkEl.href || linkEl.getAttribute("href") : null;
         const priceText = offscreenPrice ? offscreenPrice.textContent : "";
@@ -350,6 +353,7 @@ async function collectSearchPageItems(page) {
           deliveryText: shippingEl ? shippingEl.textContent : "",
           importFeesText: importFeesEl ? importFeesEl.textContent : "",
           badgeText: badgeEl ? badgeEl.textContent : "",
+          discountText: discountEl ? discountEl.textContent : "",
           sourcePage: "search",
           capturedAt: new Date().toISOString()
         };
@@ -384,6 +388,7 @@ async function searchMaterial(context, searchTarget) {
       warnings.push(`Amazon closed or replaced the ${material} results page before items could be collected.`);
       return {
         results: [],
+        discountedResults: [],
         warnings
       };
     }
@@ -472,6 +477,7 @@ async function runSearch(options = {}) {
 
     const warnings = [];
     const resultsByMaterial = Object.fromEntries(searchPlan.map((target) => [target.key, []]));
+    const discountedResultsByMaterial = Object.fromEntries(searchPlan.map((target) => [target.key, []]));
 
     for (const [index, searchTarget] of searchPlan.entries()) {
       const basePercent = 18 + Math.floor((index / searchPlan.length) * 72);
@@ -485,6 +491,7 @@ async function runSearch(options = {}) {
       try {
         const materialResults = await searchMaterial(context, searchTarget);
         resultsByMaterial[searchTarget.key] = materialResults.results;
+        discountedResultsByMaterial[searchTarget.key] = materialResults.discountedResults;
         warnings.push(...materialResults.warnings);
         emitProgress(onProgress, {
           phase: "material-complete",
@@ -518,6 +525,7 @@ async function runSearch(options = {}) {
       marketplace: DEFAULT_MARKETPLACE,
       searchPlan,
       resultsByMaterial,
+      discountedResultsByMaterial,
       warnings
     };
   } finally {
