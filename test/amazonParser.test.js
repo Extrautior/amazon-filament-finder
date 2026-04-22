@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { materialMatches, parsePrice, normalizeMaterialResults, parseDiscountPercent } = require("../src/amazonParser");
 const { payloadToCsv } = require("../src/export");
-const { buildSearchPlan, isProfileLockError } = require("../src/search");
+const { buildSearchPlan, isProfileLockError, pickStandardPriceText } = require("../src/search");
 
 test("parsePrice extracts currency and value", () => {
   assert.deepEqual(parsePrice("$29.99"), { currency: "$", value: 29.99 });
@@ -230,4 +230,30 @@ test("buildSearchPlan uses only the custom term when no materials are selected",
       query: "ASA filament"
     }
   ]);
+});
+
+test("pickStandardPriceText prefers the regular listing price over Prime-only pricing", () => {
+  const priceText = pickStandardPriceText([
+    {
+      text: "$17.99",
+      context: "Prime exclusive price $17.99 with Prime"
+    },
+    {
+      text: "$23.99",
+      context: "$23.99 FREE delivery to Israel"
+    }
+  ]);
+
+  assert.equal(priceText, "$23.99");
+});
+
+test("pickStandardPriceText falls back to the only price when no standard price is present", () => {
+  const priceText = pickStandardPriceText([
+    {
+      text: "$17.99",
+      context: "Prime exclusive price $17.99 with Prime"
+    }
+  ]);
+
+  assert.equal(priceText, "$17.99");
 });

@@ -113,6 +113,27 @@ function resolveAmazonUrl(href) {
   }
 }
 
+function pickStandardPriceText(priceCandidates = []) {
+  const candidates = Array.isArray(priceCandidates)
+    ? priceCandidates
+        .map((candidate) => ({
+          text: String(candidate?.text || "").trim(),
+          context: String(candidate?.context || "").trim()
+        }))
+        .filter((candidate) => candidate.text)
+    : [];
+
+  if (!candidates.length) {
+    return "";
+  }
+
+  const primeOnlyPattern =
+    /prime\s+(exclusive|price)|with\s+prime|prime\s+member|membership|member\s+price|join\s+prime|exclusive\s+with\s+prime/i;
+
+  const standardCandidate = candidates.find((candidate) => !primeOnlyPattern.test(candidate.context));
+  return (standardCandidate || candidates[0]).text;
+}
+
 function ensureDirectory(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
@@ -321,11 +342,32 @@ async function collectSearchPageItems(page) {
     await page.waitForSelector("[data-component-type='s-search-result']", { timeout: DEFAULT_TIMEOUT_MS });
     return (await page.$$eval("[data-component-type='s-search-result']", (cards) =>
       cards.map((card) => {
+        const pickStandardPrice = (priceCandidates) => {
+          const primeOnlyPattern =
+            /prime\s+(exclusive|price)|with\s+prime|prime\s+member|membership|member\s+price|join\s+prime|exclusive\s+with\s+prime/i;
+          const normalized = (priceCandidates || []).filter((candidate) => candidate && candidate.text);
+          const standardCandidate = normalized.find((candidate) => !primeOnlyPattern.test(candidate.context || ""));
+          return standardCandidate ? standardCandidate.text : (normalized[0] ? normalized[0].text : "");
+        };
         const titleEl = card.querySelector("h2 span");
         const linkEl = card.querySelector("h2 a");
         const asin = card.getAttribute("data-asin") || "";
         const imageEl = card.querySelector("img.s-image");
-        const offscreenPrice = card.querySelector(".a-price .a-offscreen");
+        const priceCandidates = [...card.querySelectorAll(".a-price")]
+          .map((priceNode) => {
+            const offscreen = priceNode.querySelector(".a-offscreen");
+            if (!offscreen || !(offscreen.textContent || "").trim()) {
+              return null;
+            }
+
+            const container = priceNode.closest("[data-cy], .a-section, .a-row, .s-price-instructions-style, .s-product-image-container") || priceNode;
+            const contextText = container.textContent || "";
+            return {
+              text: offscreen.textContent,
+              context: contextText
+            };
+          })
+          .filter(Boolean);
         const shippingEl =
           card.querySelector("[data-cy='delivery-recipe']") ||
           card.querySelector(".a-color-base.a-text-bold") ||
@@ -341,7 +383,7 @@ async function collectSearchPageItems(page) {
         );
 
         const href = linkEl ? linkEl.href || linkEl.getAttribute("href") : null;
-        const priceText = offscreenPrice ? offscreenPrice.textContent : "";
+        const priceText = pickStandardPrice(priceCandidates);
 
         return {
           asin,
@@ -551,6 +593,7 @@ async function openSessionBrowser() {
 
 module.exports = {
   buildSearchPlan,
+  pickStandardPriceText,
   SessionBusyError,
   SessionRequiredError,
   getSessionStatus,
