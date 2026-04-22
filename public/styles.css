@@ -474,7 +474,8 @@ button:disabled {
 .result-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(235px, 320px));
+  justify-content: start;
   padding: 0 22px 22px;
 }
 
@@ -661,5 +662,6 @@ button:disabled {
 
   .result-grid {
     grid-template-columns: 1fr;
+    justify-content: stretch;
   }
 }
