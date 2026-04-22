@@ -5,7 +5,7 @@ const { PORT } = require("./src/config");
 const { clearAuthCookie, isAuthenticated, setAuthCookie, validatePassword } = require("./src/auth");
 const { payloadToCsv } = require("./src/export");
 const logger = require("./src/logger");
-const { getSessionStatus, runSearch, SessionRequiredError } = require("./src/search");
+const { getSessionStatus, runSearch, SessionBusyError, SessionRequiredError } = require("./src/search");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 let lastAsyncCrash = null;
@@ -245,9 +245,14 @@ const server = http.createServer((req, res) => {
         }
         sendJson(res, 200, results);
       } catch (error) {
-        const statusCode = error instanceof SessionRequiredError ? 409 : 500;
+        const statusCode = error instanceof SessionRequiredError || error instanceof SessionBusyError ? 409 : 500;
         sendJson(res, statusCode, {
-          error: error instanceof SessionRequiredError ? "Amazon session requires reauthentication" : "Search failed",
+          error:
+            error instanceof SessionRequiredError
+              ? "Amazon session requires reauthentication"
+              : error instanceof SessionBusyError
+                ? "Amazon session is busy"
+                : "Search failed",
           message: error instanceof Error ? error.message : String(error)
         });
       }

@@ -1,5 +1,5 @@
 const fs = require("fs");
-const { chromium } = require("playwright");
+const { execFileSync } = require("child_process");
 const {
   MATERIALS,
   DEFAULT_MARKETPLACE,
@@ -29,6 +29,19 @@ class SessionRequiredError extends Error {
     super(message);
     this.name = "SessionRequiredError";
   }
+}
+
+class SessionBusyError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "SessionBusyError";
+  }
+}
+
+const SESSION_LOCK_FILES = ["SingletonLock", "SingletonSocket", "SingletonCookie"];
+
+function getChromium() {
+  return require("playwright").chromium;
 }
 
 function buildSearchUrl(query) {
@@ -61,6 +74,58 @@ function ensureDirectory(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
+function sessionLockPaths() {
+  return SESSION_LOCK_FILES.map((fileName) => `${AMAZON_SESSION_DIR}/${fileName}`);
+}
+
+function sessionLocksExist() {
+  return sessionLockPaths().some((candidate) => fs.existsSync(candidate));
+}
+
+function isProfileLockError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /ProcessSingleton|profile directory|SingletonLock|already in use/i.test(message);
+}
+
+function isSessionProfileBusy() {
+  try {
+    const output = execFileSync("ps", ["-eo", "pid=,args="], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    });
+
+    return output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .some((line) => /chrom/i.test(line) && line.includes(AMAZON_SESSION_DIR));
+  } catch {
+    return sessionLocksExist();
+  }
+}
+
+function clearStaleSessionLocks() {
+  if (isSessionProfileBusy()) {
+    return false;
+  }
+
+  let removedAny = false;
+  for (const candidate of sessionLockPaths()) {
+    if (!fs.existsSync(candidate)) {
+      continue;
+    }
+
+    try {
+      fs.rmSync(candidate, { force: true });
+      removedAny = true;
+    } catch {
+      // Ignore cleanup failures and let launch validation decide the next step.
+    }
+  }
+
+  return removedAny;
+}
+
 function buildLaunchOptions(headlessOverride) {
   const launchOptions = {
     headless: headlessOverride,
@@ -81,7 +146,32 @@ function buildLaunchOptions(headlessOverride) {
 
 async function launchSessionContext({ headless = HEADLESS } = {}) {
   ensureDirectory(AMAZON_SESSION_DIR);
-  return chromium.launchPersistentContext(AMAZON_SESSION_DIR, buildLaunchOptions(headless));
+
+  let firstLockError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await getChromium().launchPersistentContext(AMAZON_SESSION_DIR, buildLaunchOptions(headless));
+    } catch (error) {
+      if (!isProfileLockError(error)) {
+        throw error;
+      }
+
+      firstLockError = error;
+      if (clearStaleSessionLocks()) {
+        continue;
+      }
+
+      throw new SessionBusyError(
+        "The shared Amazon browser session is already in use. Close any leftover setup browser windows and retry in a moment."
+      );
+    }
+  }
+
+  if (firstLockError) {
+    throw new SessionBusyError(
+      "The shared Amazon browser session is still locked. Retry in a moment or refresh the session setup if a setup browser was left open."
+    );
+  }
 }
 
 async function inspectAmazonSession(context) {
@@ -121,6 +211,15 @@ async function getSessionStatus() {
     context = await launchSessionContext({ headless: true });
     return await inspectAmazonSession(context);
   } catch (error) {
+    if (error instanceof SessionBusyError) {
+      return {
+        status: "busy",
+        message: error.message,
+        cookieCount: 0,
+        likelyAuthenticated: false
+      };
+    }
+
     return {
       status: "error",
       message: error instanceof Error ? error.message : String(error),
@@ -401,8 +500,10 @@ async function openSessionBrowser() {
 }
 
 module.exports = {
+  SessionBusyError,
   SessionRequiredError,
   getSessionStatus,
+  isProfileLockError,
   openSessionBrowser,
   runSearch
 };

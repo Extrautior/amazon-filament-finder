@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { materialMatches, parsePrice, normalizeMaterialResults } = require("../src/amazonParser");
 const { payloadToCsv } = require("../src/export");
+const { isProfileLockError } = require("../src/search");
 
 test("parsePrice extracts currency and value", () => {
   assert.deepEqual(parsePrice("$29.99"), { currency: "$", value: 29.99 });
@@ -142,4 +143,12 @@ test("payloadToCsv exports normalized result rows", () => {
   assert.match(csv, /material,rank,title,asin/);
   assert.match(csv, /PLA/);
   assert.match(csv, /B000000001/);
+});
+
+test("isProfileLockError detects Chromium profile lock failures", () => {
+  assert.equal(
+    isProfileLockError(new Error("Failed to create a ProcessSingleton for your profile directory.")),
+    true
+  );
+  assert.equal(isProfileLockError(new Error("Random unrelated failure")), false);
 });

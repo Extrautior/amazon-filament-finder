@@ -85,6 +85,8 @@ The hosted app depends on one shared Amazon browser session stored in `AMAZON_SE
 
 If Amazon expires the session later, the hosted API returns a clear reauthentication error instead of empty broken results.
 
+If a setup browser window or a stale Chromium lock file temporarily keeps the shared browser profile busy, the app now retries safely and returns a short "session is busy" message instead of dumping the raw Chromium launch trace.
+
 ## Proxmox LXC deployment
 
 Debian 13 is the recommended choice for this project because the app requires Node.js `>=20` and Debian 13 ships Node.js 20 in its standard repositories. Debian 12 ships Node.js 18, so Debian 12 would need an extra Node 20+ install step.
@@ -155,3 +157,26 @@ Run:
 ```powershell
 npm test
 ```
+
+## Updating a deployed server
+
+Updating the hosted app should not require a reinstall.
+
+1. Pull the latest code:
+
+   ```bash
+   cd /opt/amazon-filament-finder
+   git pull
+   ```
+
+2. Reinstall dependencies only if needed:
+
+   ```bash
+   npm install
+   ```
+
+3. Restart the service:
+
+   ```bash
+   systemctl restart amazon-filament-finder
+   ```
