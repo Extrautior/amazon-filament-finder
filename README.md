@@ -37,6 +37,10 @@ Copy `.env.example` into your preferred service env file and set:
 - `AUTO_REFRESH_ENABLED`
 - `AUTO_REFRESH_TIMEZONE`
 - `AUTO_REFRESH_HOURS`
+- `DEAL_NOTIFICATIONS_ENABLED`
+- `DISCORD_WEBHOOK_URL`
+- `DEAL_NOTIFICATION_RETENTION_DAYS`
+- `DEAL_NOTIFICATION_MAX_ITEMS`
 
 Optional:
 
@@ -45,6 +49,8 @@ Optional:
 - `BROWSER_ARGS=--no-sandbox --disable-setuid-sandbox` if your LXC needs those Chromium flags
 
 By default, the hosted server can automatically run the same search as `Search All` twice per day at `08:00` and `20:00` in `Asia/Jerusalem`. Change `AUTO_REFRESH_HOURS` or disable it with `AUTO_REFRESH_ENABLED=false` if you want a different schedule.
+
+If you want Discord deal alerts, set `DEAL_NOTIFICATIONS_ENABLED=true` and provide `DISCORD_WEBHOOK_URL`. The server compares each successful run with the previous snapshot, keeps a persistent notified-history, and sends one summary message only for genuinely new cheapest or discounted deals that have not already been announced recently.
 
 ## Local run
 

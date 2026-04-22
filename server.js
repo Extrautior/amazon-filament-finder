@@ -1,8 +1,26 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { AUTO_REFRESH_ENABLED, AUTO_REFRESH_HOURS, AUTO_REFRESH_TIMEZONE, DATA_DIR, MATERIALS, PORT } = require("./src/config");
+const {
+  AUTO_REFRESH_ENABLED,
+  AUTO_REFRESH_HOURS,
+  AUTO_REFRESH_TIMEZONE,
+  DATA_DIR,
+  DEAL_NOTIFICATIONS_ENABLED,
+  DEAL_NOTIFICATION_MAX_ITEMS,
+  DEAL_NOTIFICATION_RETENTION_DAYS,
+  DISCORD_WEBHOOK_URL,
+  MATERIALS,
+  PORT
+} = require("./src/config");
 const { clearAuthCookie, isAuthenticated, setAuthCookie, validatePassword } = require("./src/auth");
+const { sendDiscordWebhook } = require("./src/discord");
+const {
+  detectNewDeals,
+  formatDiscordDealMessage,
+  markDealsAsNotified,
+  pruneNotifiedState
+} = require("./src/dealNotifications");
 const { payloadToCsv } = require("./src/export");
 const logger = require("./src/logger");
 const { getNextAutoRefreshRun } = require("./src/autoRefresh");
@@ -10,10 +28,12 @@ const { buildSearchPlan, getSessionStatus, runSearch, SessionBusyError, SessionR
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 const SEARCH_HISTORY_FILE = path.join(DATA_DIR, "search-history.json");
+const DEAL_NOTIFICATION_STATE_FILE = path.join(DATA_DIR, "deal-notification-state.json");
 const MAX_PERSISTED_SEARCHES = 12;
 let lastAsyncCrash = null;
 let latestSuccessfulPayload = null;
 let persistedSearchHistory = [];
+let dealNotificationState = { notified: {} };
 let inflightSearch = null;
 let inflightSearchKey = null;
 let autoRefreshTimer = null;
@@ -174,6 +194,16 @@ function saveSearchHistory() {
   }
 }
 
+function saveDealNotificationState() {
+  try {
+    fs.writeFileSync(DEAL_NOTIFICATION_STATE_FILE, JSON.stringify(dealNotificationState, null, 2));
+  } catch (error) {
+    logger.error("deal_notifications.save_failure", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
 function loadSearchHistory() {
   try {
     if (!fs.existsSync(SEARCH_HISTORY_FILE)) {
@@ -195,6 +225,24 @@ function loadSearchHistory() {
   }
 }
 
+function loadDealNotificationState() {
+  try {
+    if (!fs.existsSync(DEAL_NOTIFICATION_STATE_FILE)) {
+      dealNotificationState = pruneNotifiedState({}, new Date(), DEAL_NOTIFICATION_RETENTION_DAYS);
+      return;
+    }
+
+    const raw = fs.readFileSync(DEAL_NOTIFICATION_STATE_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    dealNotificationState = pruneNotifiedState(parsed, new Date(), DEAL_NOTIFICATION_RETENTION_DAYS);
+  } catch (error) {
+    logger.error("deal_notifications.load_failure", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    dealNotificationState = { notified: {} };
+  }
+}
+
 function storeSuccessfulPayload(payload) {
   persistedSearchHistory = [
     payload,
@@ -212,9 +260,50 @@ function findPayload(jobId) {
   return persistedSearchHistory.find((item) => item.jobId === jobId) || null;
 }
 
+async function maybeNotifyNewDeals(payload, previousPayload, trigger) {
+  if (!DEAL_NOTIFICATIONS_ENABLED || !DISCORD_WEBHOOK_URL) {
+    return;
+  }
+
+  const { newDeals, state } = detectNewDeals(payload, previousPayload, dealNotificationState, {
+    now: new Date(),
+    retentionDays: DEAL_NOTIFICATION_RETENTION_DAYS
+  });
+  dealNotificationState = state;
+
+  if (!newDeals.length) {
+    logger.info("deal_notifications.none", {
+      trigger,
+      jobId: payload.jobId
+    });
+    saveDealNotificationState();
+    return;
+  }
+
+  try {
+    const message = formatDiscordDealMessage(payload, newDeals, {
+      maxItems: DEAL_NOTIFICATION_MAX_ITEMS
+    });
+    await sendDiscordWebhook(DISCORD_WEBHOOK_URL, message);
+    dealNotificationState = markDealsAsNotified(dealNotificationState, newDeals, new Date());
+    saveDealNotificationState();
+    logger.info("deal_notifications.sent", {
+      trigger,
+      jobId: payload.jobId,
+      count: newDeals.length
+    });
+  } catch (error) {
+    logger.warn("deal_notifications.failed", {
+      trigger,
+      jobId: payload.jobId,
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
 function startAutoRefreshSearch() {
   try {
-    const job = startHostedSearch({ materials: MATERIALS });
+    const job = startHostedSearch({ materials: MATERIALS }, { trigger: "auto" });
     logger.info("auto_refresh.start", {
       jobId: job.jobId,
       deduped: job.deduped === true,
@@ -257,9 +346,10 @@ function scheduleNextAutoRefresh() {
   }, delayMs);
 }
 
-function startHostedSearch(searchRequest) {
+function startHostedSearch(searchRequest, options = {}) {
   const searchPlan = buildSearchPlan(searchRequest);
   const nextSearchKey = searchPlanKey(searchPlan);
+  const trigger = options.trigger || "manual";
 
   if (inflightSearch) {
     if (inflightSearchKey === nextSearchKey) {
@@ -306,11 +396,13 @@ function startHostedSearch(searchRequest) {
       const counts = Object.fromEntries(
         Object.entries(payload.resultsByMaterial).map(([material, items]) => [material, items.length])
       );
+      const previousPayload = latestSuccessfulPayload;
       const successfulPayload = {
         ...payload,
         jobId
       };
       storeSuccessfulPayload(successfulPayload);
+      await maybeNotifyNewDeals(successfulPayload, previousPayload, trigger);
       logger.info("search.success", { counts, warningCount: payload.warnings.length });
       setSearchProgress({
         latestPayloadJobId: jobId
@@ -373,6 +465,10 @@ const server = http.createServer((req, res) => {
           timeZone: AUTO_REFRESH_TIMEZONE,
           hours: AUTO_REFRESH_HOURS,
           nextRunAt: nextAutoRefreshAt
+        },
+        dealNotifications: {
+          enabled: DEAL_NOTIFICATIONS_ENABLED && Boolean(DISCORD_WEBHOOK_URL),
+          retentionDays: DEAL_NOTIFICATION_RETENTION_DAYS
         }
       });
       return;
@@ -452,7 +548,7 @@ const server = http.createServer((req, res) => {
 
       try {
         const body = await readJsonBody(req);
-        const job = startHostedSearch(normalizeSearchRequest(body));
+        const job = startHostedSearch(normalizeSearchRequest(body), { trigger: "manual" });
         sendJson(res, 202, job);
       } catch (error) {
         const statusCode =
@@ -536,6 +632,7 @@ server.listen(PORT, () => {
 });
 
 loadSearchHistory();
+loadDealNotificationState();
 scheduleNextAutoRefresh();
 
 process.on("unhandledRejection", (reason) => {
