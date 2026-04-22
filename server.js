@@ -1,10 +1,11 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { DATA_DIR, PORT } = require("./src/config");
+const { AUTO_REFRESH_ENABLED, AUTO_REFRESH_HOURS, AUTO_REFRESH_TIMEZONE, DATA_DIR, MATERIALS, PORT } = require("./src/config");
 const { clearAuthCookie, isAuthenticated, setAuthCookie, validatePassword } = require("./src/auth");
 const { payloadToCsv } = require("./src/export");
 const logger = require("./src/logger");
+const { getNextAutoRefreshRun } = require("./src/autoRefresh");
 const { buildSearchPlan, getSessionStatus, runSearch, SessionBusyError, SessionRequiredError } = require("./src/search");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -15,6 +16,8 @@ let latestSuccessfulPayload = null;
 let persistedSearchHistory = [];
 let inflightSearch = null;
 let inflightSearchKey = null;
+let autoRefreshTimer = null;
+let nextAutoRefreshAt = null;
 let searchProgress = {
   jobId: null,
   running: false,
@@ -209,6 +212,51 @@ function findPayload(jobId) {
   return persistedSearchHistory.find((item) => item.jobId === jobId) || null;
 }
 
+function startAutoRefreshSearch() {
+  try {
+    const job = startHostedSearch({ materials: MATERIALS });
+    logger.info("auto_refresh.start", {
+      jobId: job.jobId,
+      deduped: job.deduped === true,
+      scheduledFor: nextAutoRefreshAt
+    });
+  } catch (error) {
+    logger.warn("auto_refresh.skipped", {
+      message: error instanceof Error ? error.message : String(error),
+      scheduledFor: nextAutoRefreshAt
+    });
+  }
+}
+
+function scheduleNextAutoRefresh() {
+  if (!AUTO_REFRESH_ENABLED) {
+    nextAutoRefreshAt = null;
+    return;
+  }
+
+  if (autoRefreshTimer) {
+    clearTimeout(autoRefreshTimer);
+  }
+
+  const nextRun = getNextAutoRefreshRun(new Date(), {
+    timeZone: AUTO_REFRESH_TIMEZONE,
+    hours: AUTO_REFRESH_HOURS
+  });
+  const delayMs = Math.max(1000, nextRun.getTime() - Date.now());
+  nextAutoRefreshAt = nextRun.toISOString();
+
+  logger.info("auto_refresh.scheduled", {
+    nextRunAt: nextAutoRefreshAt,
+    timeZone: AUTO_REFRESH_TIMEZONE,
+    hours: AUTO_REFRESH_HOURS
+  });
+
+  autoRefreshTimer = setTimeout(() => {
+    startAutoRefreshSearch();
+    scheduleNextAutoRefresh();
+  }, delayMs);
+}
+
 function startHostedSearch(searchRequest) {
   const searchPlan = buildSearchPlan(searchRequest);
   const nextSearchKey = searchPlanKey(searchPlan);
@@ -319,7 +367,13 @@ const server = http.createServer((req, res) => {
         ok: true,
         sessionStatus: sessionStatus.status,
         cachedResults: Boolean(latestSuccessfulPayload),
-        lastAsyncCrash
+        lastAsyncCrash,
+        autoRefresh: {
+          enabled: AUTO_REFRESH_ENABLED,
+          timeZone: AUTO_REFRESH_TIMEZONE,
+          hours: AUTO_REFRESH_HOURS,
+          nextRunAt: nextAutoRefreshAt
+        }
       });
       return;
     }
@@ -482,6 +536,7 @@ server.listen(PORT, () => {
 });
 
 loadSearchHistory();
+scheduleNextAutoRefresh();
 
 process.on("unhandledRejection", (reason) => {
   lastAsyncCrash = reason instanceof Error ? reason.message : String(reason);

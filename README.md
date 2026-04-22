@@ -34,12 +34,17 @@ Copy `.env.example` into your preferred service env file and set:
 - `PORT`
 - `RESULT_LIMIT`
 - `SEARCH_TIMEOUT_MS`
+- `AUTO_REFRESH_ENABLED`
+- `AUTO_REFRESH_TIMEZONE`
+- `AUTO_REFRESH_HOURS`
 
 Optional:
 
 - `HEADLESS=false` while doing first-time session setup
 - `BROWSER_EXECUTABLE_PATH` if Chromium is not on `PATH`
 - `BROWSER_ARGS=--no-sandbox --disable-setuid-sandbox` if your LXC needs those Chromium flags
+
+By default, the hosted server can automatically run the same search as `Search All` twice per day at `08:00` and `20:00` in `Asia/Jerusalem`. Change `AUTO_REFRESH_HOURS` or disable it with `AUTO_REFRESH_ENABLED=false` if you want a different schedule.
 
 ## Local run
 

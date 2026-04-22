@@ -38,6 +38,21 @@ function splitBrowserArgs(value) {
     .filter(Boolean);
 }
 
+function hoursFromEnv(name, fallback) {
+  const raw = process.env[name];
+  if (!raw) {
+    return fallback;
+  }
+
+  const parsed = String(raw)
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((value) => Number.isInteger(value) && value >= 0 && value <= 23)
+    .sort((left, right) => left - right);
+
+  return parsed.length ? [...new Set(parsed)] : fallback;
+}
+
 const DATA_DIR = ensureDir(process.env.DATA_DIR || path.join(os.homedir(), ".amazon-filament-finder"));
 const AMAZON_SESSION_DIR = ensureDir(process.env.AMAZON_SESSION_DIR || path.join(DATA_DIR, "amazon-session"));
 const LOG_DIR = ensureDir(path.join(DATA_DIR, "logs"));
@@ -55,6 +70,9 @@ module.exports = {
   AMAZON_SESSION_DIR,
   LOG_DIR,
   HEADLESS: boolFromEnv("HEADLESS", true),
+  AUTO_REFRESH_ENABLED: boolFromEnv("AUTO_REFRESH_ENABLED", true),
+  AUTO_REFRESH_TIMEZONE: process.env.AUTO_REFRESH_TIMEZONE || "Asia/Jerusalem",
+  AUTO_REFRESH_HOURS: hoursFromEnv("AUTO_REFRESH_HOURS", [8, 20]),
   SESSION_COOKIE_NAME: "amazon_filament_finder_session",
   BROWSER_CHANNEL: process.env.BROWSER_CHANNEL || "",
   BROWSER_EXECUTABLE_PATH: process.env.BROWSER_EXECUTABLE_PATH || "",
