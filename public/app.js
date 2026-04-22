@@ -406,12 +406,15 @@ function updateFloatingMenuVisibility() {
   const hasResults = !resultsShellEl.hidden && resultCards().length > 0;
   const shellRect = resultsShellEl.getBoundingClientRect();
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const historyRect = historyEl.hidden ? null : historyEl.getBoundingClientRect();
+  const historyThreshold = historyRect ? historyRect.bottom : 0;
   const inView = hasResults && shellRect.top < viewportHeight - 120 && shellRect.bottom > 220;
+  const pastHistory = !historyRect || historyThreshold <= 120;
   const enabled = Boolean(inView);
 
-  floatingMenusEnabled = enabled;
-  floatingResultsNavEl.classList.toggle("is-visible", enabled && !floatingResultsNavEl.hidden);
-  floatingColorNavEl.classList.toggle("is-visible", enabled && !floatingColorNavEl.hidden);
+  floatingMenusEnabled = enabled && pastHistory;
+  floatingResultsNavEl.classList.toggle("is-visible", floatingMenusEnabled && !floatingResultsNavEl.hidden);
+  floatingColorNavEl.classList.toggle("is-visible", floatingMenusEnabled && !floatingColorNavEl.hidden);
 }
 
 function renderFloatingResultsNav(cards) {
