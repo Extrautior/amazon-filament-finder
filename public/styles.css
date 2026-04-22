@@ -595,8 +595,8 @@ button:disabled {
 .result-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  justify-content: stretch;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 280px));
+  justify-content: start;
   padding: 0 22px 22px;
 }
 
