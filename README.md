@@ -87,7 +87,11 @@ If Amazon expires the session later, the hosted API returns a clear reauthentica
 
 ## Proxmox LXC deployment
 
-These steps assume a Debian or Ubuntu LXC.
+Debian 13 is the recommended choice for this project because the app requires Node.js `>=20` and Debian 13 ships Node.js 20 in its standard repositories. Debian 12 ships Node.js 18, so Debian 12 would need an extra Node 20+ install step.
+
+For a complete Proxmox walkthrough, see `deploy/PROXMOX-DEBIAN-13.md`.
+
+These quick steps assume a Debian 13 LXC.
 
 1. Install system packages:
 
