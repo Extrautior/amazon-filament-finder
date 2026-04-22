@@ -35,7 +35,7 @@ SSH into the LXC as `root`, then run:
 
 ```bash
 apt update
-apt install -y nodejs npm chromium ca-certificates curl git caddy xorg dbus-x11 xfce4 xfce4-goodies xrdp
+apt install -y nodejs npm chromium ca-certificates curl git gnupg xorg dbus-x11 xfce4 xfce4-goodies xrdp
 ```
 
 Check the versions:
@@ -47,6 +47,20 @@ chromium --version
 ```
 
 You want `node -v` to show `v20.x` or newer.
+
+## 2b. Install Caddy from the official repository
+
+Run:
+
+```bash
+apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+chmod o+r /etc/apt/sources.list.d/caddy-stable.list
+apt update
+apt install -y caddy
+```
 
 ## 3. Create the app user and directories
 

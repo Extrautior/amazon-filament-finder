@@ -97,10 +97,22 @@ These quick steps assume a Debian 13 LXC.
 
    ```bash
    sudo apt update
-   sudo apt install -y nodejs npm chromium caddy
+   sudo apt install -y nodejs npm chromium
    ```
 
-2. Create a service user and data directory:
+2. Install Caddy from the official Caddy Debian repository:
+
+   ```bash
+   sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+   sudo chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+   sudo chmod o+r /etc/apt/sources.list.d/caddy-stable.list
+   sudo apt update
+   sudo apt install caddy
+   ```
+
+3. Create a service user and data directory:
 
    ```bash
    sudo useradd --system --create-home --shell /usr/sbin/nologin amazon-filament-finder
@@ -108,27 +120,27 @@ These quick steps assume a Debian 13 LXC.
    sudo chown -R amazon-filament-finder:amazon-filament-finder /opt/amazon-filament-finder /var/lib/amazon-filament-finder
    ```
 
-3. Copy the project into `/opt/amazon-filament-finder`, then install dependencies:
+4. Copy the project into `/opt/amazon-filament-finder`, then install dependencies:
 
    ```bash
    cd /opt/amazon-filament-finder
    npm install
    ```
 
-4. Create `/etc/amazon-filament-finder.env` from `.env.example`.
+5. Create `/etc/amazon-filament-finder.env` from `.env.example`.
 
-5. Copy `deploy/amazon-filament-finder.service` to `/etc/systemd/system/`.
+6. Copy `deploy/amazon-filament-finder.service` to `/etc/systemd/system/`.
 
-6. Start the service:
+7. Start the service:
 
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable --now amazon-filament-finder
    ```
 
-7. Update `deploy/Caddyfile` with your hostname, then load it into Caddy for HTTPS reverse proxying.
+8. Update `deploy/Caddyfile` with your hostname, then load it into Caddy for HTTPS reverse proxying.
 
-8. Run the one-time session setup using the same env file and data directory.
+9. Run the one-time session setup using the same env file and data directory.
 
 ## Notes
 
