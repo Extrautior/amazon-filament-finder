@@ -248,8 +248,7 @@ function cardForResult(item, index) {
       </div>
       ${imageUrl ? `<div class="result-image-wrap"><img class="result-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" /></div>` : ""}
       <h3><a href="${escapeHtml(amazonUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a></h3>
-      <p class="result-note">${escapeHtml(shortNote(item.availabilityNote))}</p>
-      ${item.hasDiscount && item.discountText ? `<p class="result-note">${escapeHtml(item.discountText)}</p>` : ""}
+      ${item.hasDiscount && item.discountText ? `<p class="result-note result-note-deal">${escapeHtml(item.discountText)}</p>` : ""}
       <dl class="result-metrics">
         <div>
           <dt>Item</dt>
