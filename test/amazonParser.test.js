@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { materialMatches, parsePrice, normalizeMaterialResults } = require("../src/amazonParser");
+const { payloadToCsv } = require("../src/export");
 
 test("parsePrice extracts currency and value", () => {
   assert.deepEqual(parsePrice("$29.99"), { currency: "$", value: 29.99 });
@@ -108,4 +109,37 @@ test("materialMatches requires a 1kg-style spool size", () => {
   assert.equal(materialMatches("PLA", "PLA Filament 1kg Spool 1.75mm"), true);
   assert.equal(materialMatches("PLA", "PLA Filament 250g Sample Pack"), false);
   assert.equal(materialMatches("PLA", "PLA+ Filament 2.2lbs Spool"), true);
+});
+
+test("payloadToCsv exports normalized result rows", () => {
+  const csv = payloadToCsv({
+    searchedAt: "2026-04-21T12:00:00.000Z",
+    marketplace: "amazon.com",
+    warnings: [],
+    resultsByMaterial: {
+      PLA: [
+        {
+          title: "PLA Filament 1kg",
+          asin: "B000000001",
+          url: "https://www.amazon.com/dp/B000000001",
+          imageUrl: "https://images.example.test/pla.jpg",
+          priceValue: 19.99,
+          shippingValue: 0,
+          importFeesValue: 1.5,
+          totalValue: 21.49,
+          currency: "$",
+          freeShipping: true,
+          availabilityNote: "FREE delivery",
+          capturedAt: "2026-04-21T12:00:00.000Z"
+        }
+      ],
+      PETG: [],
+      ABS: [],
+      TPU: []
+    }
+  });
+
+  assert.match(csv, /material,rank,title,asin/);
+  assert.match(csv, /PLA/);
+  assert.match(csv, /B000000001/);
 });

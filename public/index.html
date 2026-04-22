@@ -15,14 +15,26 @@
           Search live Amazon listings for PLA, PETG, ABS, and TPU filament that can ship to Israel, then sort by the
           cheapest delivered cost.
         </p>
+
+        <form id="login-form" class="login-card">
+          <label for="password">Shared app password</label>
+          <div class="login-row">
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+            <button id="login-button" type="submit">Unlock</button>
+          </div>
+          <p class="hint">Use the one shared password from the server config. Your browser keeps a session cookie after login.</p>
+        </form>
+
         <div class="controls">
           <button id="run-search">Search Amazon Filament</button>
           <button id="export-csv" type="button" disabled>Export CSV</button>
           <button id="export-json" type="button" disabled>Export JSON</button>
+          <button id="logout-button" type="button">Log Out</button>
           <p id="status">Ready.</p>
         </div>
         <p class="hint">
-          Tip: keep your Amazon delivery destination set to Israel in the same browser profile this app uses.
+          The hosted app reuses one shared Amazon session inside the server container. If results stop working, ask the
+          host to refresh the Amazon session.
         </p>
       </section>
 
@@ -38,6 +50,10 @@
         <div>
           <span class="meta-label">Filter</span>
           <strong>Free shipping only</strong>
+        </div>
+        <div>
+          <span class="meta-label">Session</span>
+          <strong id="session-state">Checking…</strong>
         </div>
       </section>
 

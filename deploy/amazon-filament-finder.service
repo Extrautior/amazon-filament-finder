@@ -1,0 +1,17 @@
+[Unit]
+Description=Amazon Filament Finder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/amazon-filament-finder
+EnvironmentFile=/etc/amazon-filament-finder.env
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+User=amazon-filament-finder
+Group=amazon-filament-finder
+
+[Install]
+WantedBy=multi-user.target

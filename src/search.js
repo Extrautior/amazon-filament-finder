@@ -1,20 +1,35 @@
 const fs = require("fs");
-const os = require("os");
-const path = require("path");
 const { chromium } = require("playwright");
 const {
   MATERIALS,
   DEFAULT_MARKETPLACE,
   DEFAULT_TIMEOUT_MS,
-  PROFILE_COPY_ROOT,
+  AMAZON_SESSION_DIR,
+  SEARCH_BASE_URL,
+  SEARCH_TERMS,
+  HEADLESS,
   BROWSER_CHANNEL,
   BROWSER_EXECUTABLE_PATH,
-  BROWSER_USER_DATA_DIR,
-  BROWSER_PROFILE,
-  SEARCH_BASE_URL,
-  SEARCH_TERMS
+  BROWSER_ARGS
 } = require("./config");
-const { normalizeMaterialResults, parsePrice } = require("./amazonParser");
+const { normalizeMaterialResults } = require("./amazonParser");
+
+const AUTH_COOKIE_NAMES = new Set([
+  "at-main",
+  "sess-at-main",
+  "session-id",
+  "session-id-time",
+  "session-token",
+  "ubid-main",
+  "x-main"
+]);
+
+class SessionRequiredError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "SessionRequiredError";
+  }
+}
 
 function buildSearchUrl(query) {
   const url = new URL(SEARCH_BASE_URL);
@@ -46,78 +61,92 @@ function ensureDirectory(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function safeCopyIfExists(sourcePath, destinationPath) {
-  if (!fs.existsSync(sourcePath)) {
-    return;
+function buildLaunchOptions(headlessOverride) {
+  const launchOptions = {
+    headless: headlessOverride,
+    viewport: { width: 1440, height: 960 },
+    timeout: DEFAULT_TIMEOUT_MS,
+    args: BROWSER_ARGS
+  };
+
+  if (BROWSER_CHANNEL) {
+    launchOptions.channel = BROWSER_CHANNEL;
   }
-  try {
-    fs.cpSync(sourcePath, destinationPath, {
-      recursive: true,
-      force: true,
-      errorOnExist: false
-    });
-  } catch {
-    // Ignore files or folders currently locked by the live browser.
+  if (BROWSER_EXECUTABLE_PATH) {
+    launchOptions.executablePath = BROWSER_EXECUTABLE_PATH;
   }
+
+  return launchOptions;
 }
 
-function copyProfileContents(sourceDir, destinationDir) {
-  ensureDirectory(destinationDir);
-
-  const skipNames = new Set([
-    "Cache",
-    "Code Cache",
-    "GPUCache",
-    "GrShaderCache",
-    "GraphiteDawnCache",
-    "DawnCache",
-    "ShaderCache",
-    "Crashpad",
-    "Safe Browsing",
-    "Media Cache",
-    "blob_storage",
-    "Network",
-    "Session Storage",
-    "Sessions"
-  ]);
-
-  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
-    if (skipNames.has(entry.name)) {
-      continue;
-    }
-
-    const sourcePath = path.join(sourceDir, entry.name);
-    const destinationPath = path.join(destinationDir, entry.name);
-    safeCopyIfExists(sourcePath, destinationPath);
-  }
+async function launchSessionContext({ headless = HEADLESS } = {}) {
+  ensureDirectory(AMAZON_SESSION_DIR);
+  return chromium.launchPersistentContext(AMAZON_SESSION_DIR, buildLaunchOptions(headless));
 }
 
-function copyProfileForRun() {
-  const tempRoot = PROFILE_COPY_ROOT || path.join(os.tmpdir(), "amazon-filament-finder");
-  ensureDirectory(tempRoot);
-  const runRoot = fs.mkdtempSync(path.join(tempRoot, "run-"));
-  const sourceProfilePath = path.join(BROWSER_USER_DATA_DIR, BROWSER_PROFILE);
-  const targetProfilePath = path.join(runRoot, BROWSER_PROFILE);
+async function inspectAmazonSession(context) {
+  const cookies = await context.cookies(["https://www.amazon.com"]);
+  const amazonCookies = cookies.filter((cookie) => /amazon\./i.test(cookie.domain));
+  const likelyAuthenticated = amazonCookies.some((cookie) => AUTH_COOKIE_NAMES.has(cookie.name));
 
-  ensureDirectory(runRoot);
-  safeCopyIfExists(path.join(BROWSER_USER_DATA_DIR, "Local State"), path.join(runRoot, "Local State"));
-  safeCopyIfExists(path.join(BROWSER_USER_DATA_DIR, "First Run"), path.join(runRoot, "First Run"));
-  copyProfileContents(sourceProfilePath, targetProfilePath);
+  if (!amazonCookies.length) {
+    return {
+      status: "missing",
+      message: "No Amazon session cookies were found. Run the session setup flow and log in again.",
+      cookieCount: 0,
+      likelyAuthenticated: false
+    };
+  }
+
+  if (!likelyAuthenticated) {
+    return {
+      status: "needs-reauth",
+      message: "Amazon cookies exist, but the shared session may have expired. Reauthenticate the session.",
+      cookieCount: amazonCookies.length,
+      likelyAuthenticated: false
+    };
+  }
 
   return {
-    runRoot,
-    targetProfilePath
+    status: "ready",
+    message: "Amazon session looks ready.",
+    cookieCount: amazonCookies.length,
+    likelyAuthenticated: true
   };
 }
 
-function cleanupProfileCopy(runRoot) {
-  if (!runRoot || !fs.existsSync(runRoot)) {
-    return;
+async function getSessionStatus() {
+  let context;
+  try {
+    context = await launchSessionContext({ headless: true });
+    return await inspectAmazonSession(context);
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : String(error),
+      cookieCount: 0,
+      likelyAuthenticated: false
+    };
+  } finally {
+    if (context) {
+      await context.close().catch(() => {});
+    }
   }
-  fs.rmSync(runRoot, { recursive: true, force: true });
 }
 
-async function collectSearchPageItemsWithRetry(page) {
+async function detectBlockingState(page, material) {
+  const currentUrl = page.url();
+  if (/ap\/signin/i.test(currentUrl)) {
+    throw new SessionRequiredError("Amazon redirected the shared browser session to sign in again.");
+  }
+
+  const pageText = await page.locator("body").innerText().catch(() => "");
+  if (/Enter the characters you see below|Type the characters you see in this image/i.test(pageText)) {
+    throw new Error(`Amazon presented a CAPTCHA while loading ${material}.`);
+  }
+}
+
+async function collectSearchPageItemsWithRetry(page, material) {
   let lastError;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -126,6 +155,7 @@ async function collectSearchPageItemsWithRetry(page) {
     }
 
     try {
+      await detectBlockingState(page, material);
       return await collectSearchPageItems(page);
     } catch (error) {
       lastError = error;
@@ -191,82 +221,6 @@ async function collectSearchPageItems(page) {
   }
 }
 
-async function enrichFromProductPage(context, item) {
-  if (!item.url) {
-    return item;
-  }
-
-  const page = await context.newPage();
-  try {
-    await page.goto(item.url, { waitUntil: "domcontentloaded", timeout: DEFAULT_TIMEOUT_MS });
-    await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
-
-    const details = await page.evaluate(() => {
-      const textFromSelectors = (selectors) => {
-        for (const selector of selectors) {
-          const el = document.querySelector(selector);
-          if (el && el.textContent) {
-            return el.textContent.trim();
-          }
-        }
-        return "";
-      };
-
-      const title = textFromSelectors(["#productTitle"]);
-      const asin = textFromSelectors(["#ASIN", "input#ASIN"]) || document.querySelector("#ASIN")?.value || "";
-      const shippingText = textFromSelectors([
-        "#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE .a-text-bold",
-        "#mir-layout-DELIVERY_BLOCK-slot-PRIMARY_DELIVERY_MESSAGE_LARGE span",
-        "#deliveryBlockMessage .a-color-success",
-        "#deliveryBlockMessage span",
-        "#delivery-message .a-text-bold",
-        "#delivery-message span"
-      ]);
-      const importFeesText = [...document.querySelectorAll("span, div")]
-        .find((node) => /import fees deposit/i.test(node.textContent || ""))
-        ?.textContent?.trim() || "";
-      const priceText = textFromSelectors([
-        "#corePriceDisplay_desktop_feature_div .a-price .a-offscreen",
-        ".priceToPay span.a-offscreen",
-        "#price_inside_buybox"
-      ]);
-
-      return {
-        title,
-        asin,
-        shippingText,
-        deliveryText: shippingText,
-        importFeesText,
-        priceText
-      };
-    });
-
-    const searchPrice = parsePrice(item.priceText || "");
-    const productPrice = parsePrice(details.priceText || "");
-    let chosenPriceText = item.priceText;
-    if (!chosenPriceText && details.priceText) {
-      chosenPriceText = details.priceText;
-    } else if (searchPrice && productPrice && productPrice.value < searchPrice.value) {
-      // Keep the cheapest visible offer we saw between search and product pages.
-      chosenPriceText = details.priceText;
-    }
-
-    return {
-      ...item,
-      ...details,
-      title: details.title || item.title,
-      priceText: chosenPriceText,
-      shippingText: details.shippingText || item.shippingText,
-      deliveryText: details.deliveryText || item.deliveryText,
-      importFeesText: details.importFeesText || item.importFeesText,
-      asin: details.asin || item.asin || null,
-      sourcePage: "product"
-    };
-  } finally {
-    await page.close();
-  }
-}
-
 async function searchMaterial(context, material) {
   const page = await context.newPage();
   const warnings = [];
@@ -275,8 +229,14 @@ async function searchMaterial(context, material) {
     const query = SEARCH_TERMS[material];
     await page.goto(buildSearchUrl(query), { waitUntil: "domcontentloaded", timeout: DEFAULT_TIMEOUT_MS });
     await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
+    await detectBlockingState(page, material);
 
-    let rawItems = await collectSearchPageItemsWithRetry(page);
+    const pageUrl = page.url();
+    if (!/p_n_is_free_shipping:10236242011/i.test(pageUrl)) {
+      warnings.push(`Amazon did not preserve the free-shipping filter for ${material}.`);
+    }
+
+    let rawItems = await collectSearchPageItemsWithRetry(page, material);
     if (!rawItems.length) {
       warnings.push(`Amazon closed or replaced the ${material} results page before items could be collected.`);
       return {
@@ -296,7 +256,8 @@ async function searchMaterial(context, material) {
           timeout: DEFAULT_TIMEOUT_MS
         });
         await nextPage.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
-        const nextItems = await collectSearchPageItemsWithRetry(nextPage);
+        await detectBlockingState(nextPage, material);
+        const nextItems = await collectSearchPageItemsWithRetry(nextPage, material);
         if (!nextItems.length) {
           warnings.push(`Amazon closed or replaced a later ${material} results page before items could be collected.`);
           nextPageHref = null;
@@ -311,22 +272,21 @@ async function searchMaterial(context, material) {
       }
     }
 
-    const enriched = [];
-    for (const item of rawItems.slice(0, 120)) {
-      const normalizedItem = {
-        ...item,
-        url: item.asin ? `https://www.amazon.com/dp/${item.asin}` : resolveAmazonUrl(item.url)
-      };
+    const results = normalizeMaterialResults(material, rawItems.map((item) => ({
+      ...item,
+      url: item.asin ? `https://www.amazon.com/dp/${item.asin}` : resolveAmazonUrl(item.url)
+    })), {
+      destinationConfirmed: true,
+      freeShippingMode: true,
+      filteredEligible: true
+    });
 
-      enriched.push(normalizedItem);
+    if (!results.length) {
+      warnings.push(`Zero parseable ${material} results remained after filtering.`);
     }
 
     return {
-      results: normalizeMaterialResults(material, enriched, {
-        destinationConfirmed: true,
-        freeShippingMode: true,
-        filteredEligible: true
-      }),
+      results,
       warnings
     };
   } finally {
@@ -334,64 +294,32 @@ async function searchMaterial(context, material) {
   }
 }
 
-function validateUserDataDir() {
-  if (!fs.existsSync(BROWSER_USER_DATA_DIR)) {
-    throw new Error(
-      `Browser user data directory not found: ${BROWSER_USER_DATA_DIR}. Set BROWSER_USER_DATA_DIR in a .env or your shell before starting the app.`
-    );
-  }
-}
-
 async function runSearch() {
-  validateUserDataDir();
-
   let context;
-  let profileCopyRoot = null;
   try {
-    const copiedProfile = copyProfileForRun();
-    profileCopyRoot = copiedProfile.runRoot;
+    context = await launchSessionContext();
+    const sessionStatus = await inspectAmazonSession(context);
+    if (sessionStatus.status !== "ready") {
+      throw new SessionRequiredError(sessionStatus.message);
+    }
 
-    const launchOptions = {
-      headless: false,
-      viewport: { width: 1440, height: 960 },
-      timeout: DEFAULT_TIMEOUT_MS,
-      args: [`--profile-directory=${BROWSER_PROFILE}`]
+    const warnings = [];
+    const resultsByMaterial = {
+      PLA: [],
+      PETG: [],
+      ABS: [],
+      TPU: []
     };
-    if (BROWSER_CHANNEL) {
-      launchOptions.channel = BROWSER_CHANNEL;
-    }
-    if (BROWSER_EXECUTABLE_PATH) {
-      launchOptions.executablePath = BROWSER_EXECUTABLE_PATH;
-    }
 
-    context = await chromium.launchPersistentContext(profileCopyRoot, {
-      ...launchOptions
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/launchPersistentContext|browser has been closed|Target page, context or browser has been closed/i.test(message)) {
-      throw new Error(
-        `Could not open a temporary copy of your Brave profile "${BROWSER_PROFILE}".`
-      );
-    }
-    throw error;
-  }
-
-  const warnings = [];
-  const resultsByMaterial = {
-    PLA: [],
-    PETG: [],
-    ABS: [],
-    TPU: []
-  };
-
-  try {
     for (const material of MATERIALS) {
       try {
         const materialResults = await searchMaterial(context, material);
         resultsByMaterial[material] = materialResults.results;
         warnings.push(...materialResults.warnings);
       } catch (error) {
+        if (error instanceof SessionRequiredError) {
+          throw error;
+        }
         warnings.push(`Search failed for ${material}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
@@ -406,10 +334,19 @@ async function runSearch() {
     if (context) {
       await context.close().catch(() => {});
     }
-    cleanupProfileCopy(profileCopyRoot);
   }
 }
 
+async function openSessionBrowser() {
+  const context = await launchSessionContext({ headless: false });
+  const page = context.pages()[0] || (await context.newPage());
+  await page.goto("https://www.amazon.com", { waitUntil: "domcontentloaded", timeout: DEFAULT_TIMEOUT_MS });
+  return context;
+}
+
 module.exports = {
+  SessionRequiredError,
+  getSessionStatus,
+  openSessionBrowser,
   runSearch
 };

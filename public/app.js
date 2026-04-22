@@ -1,15 +1,18 @@
 const button = document.getElementById("run-search");
+const logoutButton = document.getElementById("logout-button");
+const loginForm = document.getElementById("login-form");
+const passwordInput = document.getElementById("password");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
 const warningsEl = document.getElementById("warnings");
 const metaEl = document.getElementById("meta");
 const searchedAtEl = document.getElementById("searched-at");
 const marketplaceEl = document.getElementById("marketplace");
+const sessionStateEl = document.getElementById("session-state");
 const exportCsvButton = document.getElementById("export-csv");
 const exportJsonButton = document.getElementById("export-json");
 
 const MATERIALS = ["PLA", "PETG", "ABS", "TPU"];
-let latestPayload = null;
 
 function money(value, currency) {
   if (value == null) {
@@ -72,67 +75,14 @@ function setExportEnabled(enabled) {
   exportJsonButton.disabled = !enabled;
 }
 
-function downloadFile(filename, content, contentType) {
-  const blob = new Blob([content], { type: contentType });
-  const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(objectUrl);
+function setLockedState(locked) {
+  button.disabled = locked;
+  exportCsvButton.disabled = locked || exportCsvButton.disabled;
+  exportJsonButton.disabled = locked || exportJsonButton.disabled;
 }
 
-function exportRows(payload) {
-  return MATERIALS.flatMap((material) =>
-    (payload.resultsByMaterial[material] || []).map((item, index) => ({
-      material,
-      rank: index + 1,
-      title: item.title,
-      asin: item.asin || "",
-      url: item.url || "",
-      imageUrl: item.imageUrl || "",
-      priceValue: item.priceValue ?? "",
-      shippingValue: item.shippingValue ?? "",
-      importFeesValue: item.importFeesValue ?? "",
-      totalValue: item.totalValue ?? "",
-      currency: item.currency || "",
-      freeShipping: item.freeShipping ? "Yes" : "No",
-      availabilityNote: item.availabilityNote || "",
-      capturedAt: item.capturedAt || ""
-    }))
-  );
-}
-
-function exportCsv(payload) {
-  const rows = exportRows(payload);
-  const headers = [
-    "material",
-    "rank",
-    "title",
-    "asin",
-    "url",
-    "imageUrl",
-    "priceValue",
-    "shippingValue",
-    "importFeesValue",
-    "totalValue",
-    "currency",
-    "freeShipping",
-    "availabilityNote",
-    "capturedAt"
-  ];
-  const escapeCell = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-  const csv = [
-    headers.join(","),
-    ...rows.map((row) => headers.map((header) => escapeCell(row[header])).join(","))
-  ].join("\n");
-  downloadFile("amazon-filament-results.csv", csv, "text/csv;charset=utf-8");
-}
-
-function exportJson(payload) {
-  downloadFile("amazon-filament-results.json", JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
+function openDownload(url) {
+  window.location.assign(url);
 }
 
 function cardForResult(item, index) {
@@ -199,13 +149,12 @@ function renderWarnings(warnings) {
   warningsEl.innerHTML = `
     <h2>Warnings</h2>
     <ul>
-      ${warnings.map((warning) => `<li>${warning}</li>`).join("")}
+      ${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}
     </ul>
   `;
 }
 
 function renderResults(payload) {
-  latestPayload = payload;
   metaEl.hidden = false;
   searchedAtEl.textContent = new Date(payload.searchedAt).toLocaleString();
   marketplaceEl.textContent = payload.marketplace;
@@ -214,37 +163,91 @@ function renderResults(payload) {
   setExportEnabled(true);
 }
 
+async function updateSessionState() {
+  try {
+    const response = await fetch("/admin/session-status");
+    if (response.status === 401) {
+      sessionStateEl.textContent = "Locked";
+      loginForm.hidden = false;
+      return false;
+    }
+
+    const payload = await response.json();
+    sessionStateEl.textContent = payload.status;
+    loginForm.hidden = true;
+    if (payload.status !== "ready") {
+      renderWarnings([payload.message]);
+    }
+    return true;
+  } catch (error) {
+    sessionStateEl.textContent = "Unknown";
+    renderWarnings([error.message]);
+    return false;
+  }
+}
+
+async function login(password) {
+  const response = await fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password })
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || payload.message || "Login failed");
+  }
+}
+
 async function runSearch() {
-  button.disabled = true;
+  setLockedState(true);
   setExportEnabled(false);
-  statusEl.textContent = "Searching Amazon. The browser may open while prices and shipping details are collected.";
+  statusEl.textContent = "Searching Amazon. The shared browser session in the container is collecting prices now.";
 
   try {
     const response = await fetch("/api/search", { method: "POST" });
     const payload = await response.json();
+    if (response.status === 401) {
+      loginForm.hidden = false;
+      throw new Error("Enter the shared password to continue.");
+    }
     if (!response.ok) {
       throw new Error(payload.message || payload.error || "Search failed");
     }
 
     renderResults(payload);
+    await updateSessionState();
     statusEl.textContent = "Search complete.";
   } catch (error) {
     statusEl.textContent = error.message;
     renderWarnings([error.message]);
-    latestPayload = null;
   } finally {
     button.disabled = false;
   }
 }
 
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  statusEl.textContent = "Checking password...";
+
+  try {
+    await login(passwordInput.value);
+    passwordInput.value = "";
+    statusEl.textContent = "Unlocked.";
+    loginForm.hidden = true;
+    await updateSessionState();
+  } catch (error) {
+    statusEl.textContent = error.message;
+  }
+});
+
 button.addEventListener("click", runSearch);
-exportCsvButton.addEventListener("click", () => {
-  if (latestPayload) {
-    exportCsv(latestPayload);
-  }
+logoutButton.addEventListener("click", async () => {
+  await fetch("/api/logout", { method: "POST" });
+  loginForm.hidden = false;
+  sessionStateEl.textContent = "Locked";
+  statusEl.textContent = "Logged out.";
 });
-exportJsonButton.addEventListener("click", () => {
-  if (latestPayload) {
-    exportJson(latestPayload);
-  }
-});
+exportCsvButton.addEventListener("click", () => openDownload("/api/export.csv"));
+exportJsonButton.addEventListener("click", () => openDownload("/api/export.json"));
+
+void updateSessionState();

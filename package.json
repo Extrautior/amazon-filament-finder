@@ -5,6 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "session:setup": "node scripts/setupSession.js",
+    "session:status": "node scripts/checkSession.js",
     "test": "node --test"
   },
   "engines": {

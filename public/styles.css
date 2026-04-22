@@ -91,6 +91,37 @@ h1 {
   margin: 24px 0 12px;
 }
 
+.login-card {
+  margin-top: 24px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.login-card label {
+  display: block;
+  margin-bottom: 10px;
+  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-weight: 700;
+}
+
+.login-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+input[type="password"] {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 14px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 1rem;
+}
+
 button {
   border: none;
   border-radius: 999px;
@@ -301,5 +332,9 @@ button:disabled {
 
   .result-grid {
     padding: 0 20px 20px;
+  }
+
+  .login-row {
+    flex-direction: column;
   }
 }

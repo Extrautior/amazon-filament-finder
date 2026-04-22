@@ -1,11 +1,16 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { runSearch } = require("./src/search");
+const { PORT } = require("./src/config");
+const { clearAuthCookie, isAuthenticated, setAuthCookie, validatePassword } = require("./src/auth");
+const { payloadToCsv } = require("./src/export");
+const logger = require("./src/logger");
+const { getSessionStatus, runSearch, SessionRequiredError } = require("./src/search");
 
-const PORT = Number(process.env.PORT || 3017);
 const PUBLIC_DIR = path.join(__dirname, "public");
 let lastAsyncCrash = null;
+let latestSuccessfulPayload = null;
+let inflightSearch = null;
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -15,9 +20,20 @@ const MIME_TYPES = {
   ".ico": "image/x-icon"
 };
 
-function sendJson(res, statusCode, payload) {
-  res.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
+function sendJson(res, statusCode, payload, headers = {}) {
+  res.writeHead(statusCode, {
+    "Content-Type": "application/json; charset=utf-8",
+    ...headers
+  });
   res.end(JSON.stringify(payload));
+}
+
+function sendText(res, statusCode, contentType, body, headers = {}) {
+  res.writeHead(statusCode, {
+    "Content-Type": contentType,
+    ...headers
+  });
+  res.end(body);
 }
 
 function sendFile(res, filePath) {
@@ -42,32 +58,178 @@ function getStaticFile(requestPath) {
   return resolvedPath;
 }
 
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let raw = "";
+    req.on("data", (chunk) => {
+      raw += chunk;
+      if (raw.length > 1024 * 1024) {
+        reject(new Error("Request body too large"));
+      }
+    });
+    req.on("end", () => {
+      if (!raw) {
+        resolve({});
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        reject(new Error("Invalid JSON body"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function requireAuth(req, res) {
+  if (isAuthenticated(req)) {
+    return true;
+  }
+
+  sendJson(res, 401, { error: "Authentication required" });
+  return false;
+}
+
+async function runHostedSearch() {
+  if (inflightSearch) {
+    logger.info("search.deduped", { reason: "existing-search-in-flight" });
+    return inflightSearch;
+  }
+
+  inflightSearch = (async () => {
+    logger.info("search.start");
+    try {
+      const payload = await runSearch();
+      const counts = Object.fromEntries(
+        Object.entries(payload.resultsByMaterial).map(([material, items]) => [material, items.length])
+      );
+      latestSuccessfulPayload = payload;
+      logger.info("search.success", { counts, warningCount: payload.warnings.length });
+      return payload;
+    } catch (error) {
+      logger.error("search.failure", {
+        message: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    } finally {
+      inflightSearch = null;
+    }
+  })();
+
+  return inflightSearch;
+}
+
 const server = http.createServer((req, res) => {
   void (async () => {
-    if (!req.url) {
-      sendJson(res, 400, { error: "Missing request URL" });
+    if (!req.url || !req.method) {
+      sendJson(res, 400, { error: "Missing request data" });
       return;
     }
 
-    if (req.method === "POST" && req.url === "/api/search") {
+    const parsedUrl = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    const pathname = parsedUrl.pathname;
+
+    if (req.method === "GET" && pathname === "/health") {
+      const sessionStatus = await getSessionStatus();
+      sendJson(res, 200, {
+        ok: true,
+        sessionStatus: sessionStatus.status,
+        cachedResults: Boolean(latestSuccessfulPayload),
+        lastAsyncCrash
+      });
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/login") {
+      const body = await readJsonBody(req);
+      if (!validatePassword(body.password)) {
+        logger.warn("auth.failed");
+        sendJson(res, 401, { error: "Invalid password" });
+        return;
+      }
+
+      setAuthCookie(res);
+      logger.info("auth.success");
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/logout") {
+      clearAuthCookie(res);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/session-status") {
+      if (!requireAuth(req, res)) {
+        return;
+      }
+
+      const status = await getSessionStatus();
+      sendJson(res, 200, status);
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/search") {
+      if (!requireAuth(req, res)) {
+        return;
+      }
+
       try {
-        const results = await runSearch();
+        const results = await runHostedSearch();
         if (lastAsyncCrash) {
           results.warnings = [...(results.warnings || []), `Recovered async error: ${lastAsyncCrash}`];
           lastAsyncCrash = null;
         }
         sendJson(res, 200, results);
       } catch (error) {
-        sendJson(res, 500, {
-          error: "Search failed",
+        const statusCode = error instanceof SessionRequiredError ? 409 : 500;
+        sendJson(res, statusCode, {
+          error: error instanceof SessionRequiredError ? "Amazon session requires reauthentication" : "Search failed",
           message: error instanceof Error ? error.message : String(error)
         });
       }
       return;
     }
 
+    if (req.method === "GET" && pathname === "/api/export.json") {
+      if (!requireAuth(req, res)) {
+        return;
+      }
+      if (!latestSuccessfulPayload) {
+        sendJson(res, 404, { error: "No successful search payload is cached yet" });
+        return;
+      }
+
+      sendJson(res, 200, latestSuccessfulPayload, {
+        "Content-Disposition": 'attachment; filename="amazon-filament-results.json"'
+      });
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/api/export.csv") {
+      if (!requireAuth(req, res)) {
+        return;
+      }
+      if (!latestSuccessfulPayload) {
+        sendJson(res, 404, { error: "No successful search payload is cached yet" });
+        return;
+      }
+
+      sendText(
+        res,
+        200,
+        "text/csv; charset=utf-8",
+        payloadToCsv(latestSuccessfulPayload),
+        { "Content-Disposition": 'attachment; filename="amazon-filament-results.csv"' }
+      );
+      return;
+    }
+
     if (req.method === "GET") {
-      const staticFile = getStaticFile(req.url);
+      const staticFile = getStaticFile(pathname);
       if (!staticFile) {
         sendJson(res, 404, { error: "Not found" });
         return;
@@ -78,6 +240,9 @@ const server = http.createServer((req, res) => {
 
     sendJson(res, 405, { error: "Method not allowed" });
   })().catch((error) => {
+    logger.error("server.unhandled", {
+      message: error instanceof Error ? error.message : String(error)
+    });
     sendJson(res, 500, {
       error: "Unhandled server error",
       message: error instanceof Error ? error.message : String(error)
@@ -86,15 +251,16 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
+  logger.info("server.start", { port: PORT });
   console.log(`Amazon Filament Finder running at http://localhost:${PORT}`);
 });
 
 process.on("unhandledRejection", (reason) => {
   lastAsyncCrash = reason instanceof Error ? reason.message : String(reason);
-  console.error("Unhandled rejection:", reason);
+  logger.error("process.unhandledRejection", { message: lastAsyncCrash });
 });
 
 process.on("uncaughtException", (error) => {
   lastAsyncCrash = error instanceof Error ? error.message : String(error);
-  console.error("Uncaught exception:", error);
+  logger.error("process.uncaughtException", { message: lastAsyncCrash });
 });
