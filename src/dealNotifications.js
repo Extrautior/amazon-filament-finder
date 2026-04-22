@@ -115,6 +115,14 @@ function money(value, currency) {
   return `${value.toFixed(2)} ${currency}`;
 }
 
+function truncate(value, maxLength) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trim()}...`;
+}
+
 function markDealsAsNotified(state, deals, now = new Date()) {
   const normalizedState = pruneNotifiedState(state, now);
   const timestamp = now.toISOString();
@@ -126,37 +134,99 @@ function markDealsAsNotified(state, deals, now = new Date()) {
   return normalizedState;
 }
 
-function formatDiscordDealMessage(payload, deals, options = {}) {
-  const maxItems = Number.isFinite(options.maxItems) ? options.maxItems : 8;
+function dealLine(deal, maxLength = 280) {
+  const prefix = `${deal.sectionLabel} ${deal.category === "discounted" ? "discounted" : "cheapest"}`;
+  const priceBits = [`Item ${money(deal.priceValue, deal.currency)}`, `Total ${money(deal.totalValue, deal.currency)}`];
+  if (deal.category === "discounted" && (deal.discountPercent != null || deal.discountText)) {
+    priceBits.push(deal.discountPercent != null ? `Save ${deal.discountPercent}%` : truncate(deal.discountText, 32));
+  }
+
+  const url = truncate(deal.url, 140);
+  const baseLines = [
+    `• **${prefix}** ${truncate(deal.title, 100)}`,
+    `  ${priceBits.join(" · ")}`,
+    `  ${url}`
+  ];
+
+  let block = baseLines.join("\n");
+  if (block.length <= maxLength) {
+    return block;
+  }
+
+  const availableTitleLength = Math.max(24, 100 - (block.length - maxLength));
+  baseLines[0] = `• **${prefix}** ${truncate(deal.title, availableTitleLength)}`;
+  block = baseLines.join("\n");
+  if (block.length <= maxLength) {
+    return block;
+  }
+
+  const availableUrlLength = Math.max(48, 140 - (block.length - maxLength));
+  baseLines[2] = `  ${truncate(deal.url, availableUrlLength)}`;
+  return baseLines.join("\n");
+}
+
+function buildDiscordHeader(payload, deals) {
   const searchedAt = payload?.searchedAt ? new Date(payload.searchedAt).toLocaleString("en-GB", { hour12: false }) : "Unknown time";
   const cheapestCount = deals.filter((deal) => deal.category === "cheapest").length;
   const discountedCount = deals.filter((deal) => deal.category === "discounted").length;
-  const shownDeals = deals.slice(0, maxItems);
 
-  const content = [
+  return [
     `**New filament deals found**`,
     `Search finished at ${searchedAt}`,
-    `Cheapest: ${cheapestCount} new · Discounted: ${discountedCount} new`,
-    "",
-    ...shownDeals.map((deal) => {
-      const priceLine = `Item ${money(deal.priceValue, deal.currency)} · Total ${money(deal.totalValue, deal.currency)}`;
-      const discountLine =
-        deal.category === "discounted" && (deal.discountPercent != null || deal.discountText)
-          ? ` · ${deal.discountPercent != null ? `Save ${deal.discountPercent}%` : deal.discountText}`
-          : "";
-      return `• **${deal.sectionLabel} ${deal.category === "discounted" ? "discounted" : "cheapest"}**: ${deal.title}\n  ${priceLine}${discountLine}\n  ${deal.url}`;
-    }),
-    deals.length > shownDeals.length ? `\n…and ${deals.length - shownDeals.length} more.` : ""
-  ].filter(Boolean).join("\n");
+    `Cheapest: ${cheapestCount} new · Discounted: ${discountedCount} new`
+  ];
+}
 
-  return { content };
+function formatDiscordDealMessages(payload, deals, options = {}) {
+  const maxItems = Number.isFinite(options.maxItems) ? options.maxItems : 6;
+  const maxLength = Number.isFinite(options.maxLength) ? options.maxLength : 1800;
+  const shownDeals = deals.slice(0, maxItems);
+  const headerLines = buildDiscordHeader(payload, deals);
+  const messages = [];
+  let currentLines = [...headerLines, ""];
+  const primaryHeaderLength = currentLines.join("\n").length;
+  const secondaryHeader = ["**More new filament deals**", ""];
+  const secondaryHeaderLength = secondaryHeader.join("\n").length;
+
+  for (const deal of shownDeals) {
+    const nextBlock = dealLine(deal, Math.max(220, maxLength - 120));
+    const candidate = [...currentLines, nextBlock].join("\n");
+    const activeHeaderLength = messages.length === 0 ? primaryHeaderLength : secondaryHeaderLength;
+    const hasExistingBlocks = currentLines.join("\n").length > activeHeaderLength;
+    if (candidate.length > maxLength && hasExistingBlocks) {
+      messages.push({ content: currentLines.join("\n") });
+      currentLines = [...secondaryHeader, nextBlock];
+      continue;
+    }
+
+    currentLines.push(nextBlock);
+  }
+
+  if (deals.length > shownDeals.length) {
+    const tailLine = `…and ${deals.length - shownDeals.length} more deal${deals.length - shownDeals.length === 1 ? "" : "s"} from the same run.`;
+    const candidate = [...currentLines, "", tailLine].join("\n");
+    const activeHeaderLength = messages.length === 0 ? primaryHeaderLength : secondaryHeaderLength;
+    const hasExistingBlocks = currentLines.join("\n").length > activeHeaderLength;
+    if (candidate.length > maxLength && hasExistingBlocks) {
+      messages.push({ content: currentLines.join("\n") });
+      currentLines = [...secondaryHeader, tailLine];
+    } else {
+      currentLines.push("", tailLine);
+    }
+  }
+
+  if (currentLines.filter(Boolean).length) {
+    messages.push({ content: currentLines.join("\n") });
+  }
+
+  return messages;
 }
 
 module.exports = {
   dealFingerprint,
   detectNewDeals,
   flattenDeals,
-  formatDiscordDealMessage,
+  formatDiscordDealMessages,
   markDealsAsNotified,
   pruneNotifiedState
 };

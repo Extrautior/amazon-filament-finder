@@ -17,7 +17,7 @@ const { clearAuthCookie, isAuthenticated, setAuthCookie, validatePassword } = re
 const { sendDiscordWebhook } = require("./src/discord");
 const {
   detectNewDeals,
-  formatDiscordDealMessage,
+  formatDiscordDealMessages,
   markDealsAsNotified,
   pruneNotifiedState
 } = require("./src/dealNotifications");
@@ -281,16 +281,19 @@ async function maybeNotifyNewDeals(payload, previousPayload, trigger) {
   }
 
   try {
-    const message = formatDiscordDealMessage(payload, newDeals, {
+    const messages = formatDiscordDealMessages(payload, newDeals, {
       maxItems: DEAL_NOTIFICATION_MAX_ITEMS
     });
-    await sendDiscordWebhook(DISCORD_WEBHOOK_URL, message);
+    for (const message of messages) {
+      await sendDiscordWebhook(DISCORD_WEBHOOK_URL, message);
+    }
     dealNotificationState = markDealsAsNotified(dealNotificationState, newDeals, new Date());
     saveDealNotificationState();
     logger.info("deal_notifications.sent", {
       trigger,
       jobId: payload.jobId,
-      count: newDeals.length
+      count: newDeals.length,
+      messageCount: messages.length
     });
   } catch (error) {
     logger.warn("deal_notifications.failed", {

@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   detectNewDeals,
-  formatDiscordDealMessage,
+  formatDiscordDealMessages,
   markDealsAsNotified
 } = require("../src/dealNotifications");
 
@@ -58,9 +58,9 @@ test("detectNewDeals suppresses already notified deals", () => {
   assert.equal(secondPass.newDeals.length, 0);
 });
 
-test("formatDiscordDealMessage builds one summary payload", () => {
+test("formatDiscordDealMessages builds a short summary payload", () => {
   const payload = payloadForDeals();
-  const message = formatDiscordDealMessage(payload, [
+  const messages = formatDiscordDealMessages(payload, [
     {
       category: "cheapest",
       sectionLabel: "PLA",
@@ -72,7 +72,29 @@ test("formatDiscordDealMessage builds one summary payload", () => {
     }
   ]);
 
-  assert.match(message.content, /New filament deals found/);
-  assert.match(message.content, /PLA cheapest/);
-  assert.match(message.content, /https:\/\/example\.test\/1/);
+  assert.equal(messages.length, 1);
+  assert.match(messages[0].content, /New filament deals found/);
+  assert.match(messages[0].content, /PLA cheapest/);
+  assert.match(messages[0].content, /https:\/\/example\.test\/1/);
+});
+
+test("formatDiscordDealMessages splits oversized notifications into multiple webhook payloads", () => {
+  const payload = payloadForDeals();
+  const deals = Array.from({ length: 4 }, (_, index) => ({
+    category: "cheapest",
+    sectionLabel: "PLA",
+    title: `Very Long PLA Deal Title ${index + 1} `.repeat(8),
+    url: `https://example.test/${index + 1}`,
+    priceValue: 18.99 + index,
+    totalValue: 18.99 + index,
+    currency: "$"
+  }));
+
+  const messages = formatDiscordDealMessages(payload, deals, {
+    maxItems: 4,
+    maxLength: 400
+  });
+
+  assert.ok(messages.length > 1);
+  assert.ok(messages.every((message) => message.content.length <= 400));
 });
