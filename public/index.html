@@ -4,96 +4,121 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Amazon Filament Finder</title>
-    <link rel="stylesheet" href="/styles.css?v=6" />
+    <link rel="stylesheet" href="/styles.css?v=7" />
   </head>
   <body>
     <main class="shell">
-      <section class="hero">
-        <p class="eyebrow">Amazon.com to Israel</p>
-        <h1>Amazon Filament Finder</h1>
-        <p class="lede">
-          Search live Amazon listings for PLA, PETG, ABS, and TPU filament that can ship to Israel, then sort by the
-          cheapest delivered cost.
-        </p>
-
-        <form id="login-form" class="login-card">
-          <label for="password">Shared app password</label>
-          <div class="login-row">
-            <input id="password" name="password" type="password" autocomplete="current-password" required />
-            <button id="login-button" type="submit">Unlock</button>
-          </div>
-          <p class="hint">Use the one shared password from the server config. Your browser keeps a session cookie after login.</p>
-        </form>
-
-        <div class="controls">
-          <button id="run-search">Search All</button>
-          <button id="export-csv" type="button" disabled>Export CSV</button>
-          <button id="export-json" type="button" disabled>Export JSON</button>
-          <button id="logout-button" type="button">Log Out</button>
-          <p id="status">Ready.</p>
-        </div>
-        <div class="search-toolbar">
-          <div class="quick-searches">
-            <span class="toolbar-label">Quick searches</span>
-            <button class="material-search" data-material="PLA" type="button">PLA</button>
-            <button class="material-search" data-material="PETG" type="button">PETG</button>
-            <button class="material-search" data-material="ABS" type="button">ABS</button>
-            <button class="material-search" data-material="TPU" type="button">TPU</button>
-          </div>
-          <form id="custom-search-form" class="custom-search-form">
-            <label class="toolbar-label" for="custom-search-term">Custom term</label>
-            <div class="custom-search-row">
-              <input id="custom-search-term" name="custom-search-term" type="text" placeholder="ASA filament" />
-              <button id="run-custom-search" type="submit">Search Custom</button>
+      <section class="dashboard-shell">
+        <section class="hero">
+          <div class="hero-top">
+            <div class="hero-copy">
+              <p class="eyebrow">Amazon.com to Israel</p>
+              <h1>Amazon Filament Finder</h1>
+              <p class="lede">
+                Search live Amazon listings for PLA, PETG, ABS, and TPU filament that can ship to Israel, then sort by
+                the cheapest delivered cost.
+              </p>
             </div>
+            <div class="hero-status">
+              <div class="status-chip">
+                <span class="status-chip-label">Shared session</span>
+                <strong id="session-state">Checking…</strong>
+              </div>
+              <p class="hint">
+                This hosted app reuses one shared Amazon session inside the server container. If results stop working,
+                refresh the Amazon session on the host.
+              </p>
+            </div>
+          </div>
+
+          <form id="login-form" class="login-card">
+            <label for="password">Shared app password</label>
+            <div class="login-row">
+              <input id="password" name="password" type="password" autocomplete="current-password" required />
+              <button id="login-button" type="submit">Unlock</button>
+            </div>
+            <p class="hint">Use the one shared password from the server config. Your browser keeps a session cookie after login.</p>
           </form>
-        </div>
-        <section class="progress-card" id="progress-card" hidden>
-          <div class="progress-head">
-            <strong id="progress-label">Preparing search…</strong>
-            <span id="progress-percent">0%</span>
+
+          <div class="controls-panel">
+            <div class="controls">
+              <button id="run-search">Search All</button>
+              <button id="export-csv" type="button" disabled>Export CSV</button>
+              <button id="export-json" type="button" disabled>Export JSON</button>
+              <button id="logout-button" type="button">Log Out</button>
+            </div>
+            <div class="status-panel">
+              <span class="status-label">Live status</span>
+              <p id="status">Ready.</p>
+            </div>
           </div>
-          <div class="progress-track" aria-hidden="true">
-            <div class="progress-fill" id="progress-fill"></div>
+
+          <div class="search-toolbar">
+            <div class="quick-searches toolbar-block">
+              <span class="toolbar-label">Quick searches</span>
+              <div class="toolbar-actions">
+                <button class="material-search" data-material="PLA" type="button">PLA</button>
+                <button class="material-search" data-material="PETG" type="button">PETG</button>
+                <button class="material-search" data-material="ABS" type="button">ABS</button>
+                <button class="material-search" data-material="TPU" type="button">TPU</button>
+              </div>
+            </div>
+            <form id="custom-search-form" class="custom-search-form toolbar-block">
+              <label class="toolbar-label" for="custom-search-term">Custom term</label>
+              <div class="custom-search-row">
+                <input id="custom-search-term" name="custom-search-term" type="text" placeholder="ASA filament" />
+                <button id="run-custom-search" type="submit">Search Custom</button>
+              </div>
+            </form>
           </div>
-          <p class="progress-meta" id="progress-meta">Waiting to start.</p>
+
+          <section class="meta" id="meta" hidden>
+            <article class="stat-card">
+              <span class="meta-label">Marketplace</span>
+              <strong id="marketplace">amazon.com</strong>
+            </article>
+            <article class="stat-card">
+              <span class="meta-label">Last searched</span>
+              <strong id="searched-at">-</strong>
+            </article>
+            <article class="stat-card">
+              <span class="meta-label">Cheapest found</span>
+              <strong id="cheapest-count">0</strong>
+            </article>
+            <article class="stat-card">
+              <span class="meta-label">Discounted found</span>
+              <strong id="discount-count">0</strong>
+            </article>
+            <article class="stat-card">
+              <span class="meta-label">Filter</span>
+              <strong>Free shipping only</strong>
+            </article>
+          </section>
+
+          <section class="progress-card" id="progress-card" hidden>
+            <div class="progress-head">
+              <strong id="progress-label">Preparing search…</strong>
+              <span id="progress-percent">0%</span>
+            </div>
+            <div class="progress-track" aria-hidden="true">
+              <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <p class="progress-meta" id="progress-meta">Waiting to start.</p>
+          </section>
         </section>
-        <p class="hint">
-          The hosted app reuses one shared Amazon session inside the server container. If results stop working, ask the
-          host to refresh the Amazon session.
-        </p>
-      </section>
 
-      <section class="meta" id="meta" hidden>
-        <div>
-          <span class="meta-label">Marketplace</span>
-          <strong id="marketplace">amazon.com</strong>
-        </div>
-        <div>
-          <span class="meta-label">Last searched</span>
-          <strong id="searched-at">-</strong>
-        </div>
-        <div>
-          <span class="meta-label">Filter</span>
-          <strong>Free shipping only</strong>
-        </div>
-        <div>
-          <span class="meta-label">Session</span>
-          <strong id="session-state">Checking…</strong>
-        </div>
-      </section>
-
-      <section id="history" class="history" hidden>
-        <div class="history-header">
-          <h2>Recent Searches</h2>
-          <p>Open any saved result set from the latest searches run on this server.</p>
-        </div>
-        <div id="history-list" class="history-list"></div>
+        <aside id="history" class="history" hidden>
+          <div class="history-header">
+            <h2>Recent Searches</h2>
+            <p>Jump back into saved result sets from the latest searches run on this server.</p>
+          </div>
+          <div id="history-list" class="history-list"></div>
+        </aside>
       </section>
 
       <section id="warnings" class="warnings" hidden></section>
       <section id="results" class="results"></section>
     </main>
-    <script src="/app.js?v=6"></script>
+    <script src="/app.js?v=7"></script>
   </body>
   </html>

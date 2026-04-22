@@ -9,6 +9,8 @@ const metaEl = document.getElementById("meta");
 const searchedAtEl = document.getElementById("searched-at");
 const marketplaceEl = document.getElementById("marketplace");
 const sessionStateEl = document.getElementById("session-state");
+const cheapestCountEl = document.getElementById("cheapest-count");
+const discountCountEl = document.getElementById("discount-count");
 const historyEl = document.getElementById("history");
 const historyListEl = document.getElementById("history-list");
 const exportCsvButton = document.getElementById("export-csv");
@@ -338,9 +340,14 @@ function renderResults(payload) {
     throw new Error("The server returned an incomplete search result payload. Refresh and try again.");
   }
 
+  const cheapestCount = Object.values(payload.resultsByMaterial || {}).reduce((sum, items) => sum + items.length, 0);
+  const discountedCount = Object.values(payload.discountedResultsByMaterial || {}).reduce((sum, items) => sum + items.length, 0);
+
   metaEl.hidden = false;
   searchedAtEl.textContent = new Date(payload.searchedAt).toLocaleString();
   marketplaceEl.textContent = payload.marketplace;
+  cheapestCountEl.textContent = String(cheapestCount);
+  discountCountEl.textContent = String(discountedCount);
   const sections = payload.searchPlan.length
     ? payload.searchPlan
     : Object.keys(payload.resultsByMaterial).map((key) => ({ key, label: key }));
