@@ -1,8 +1,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { materialMatches, parsePrice, normalizeMaterialResults, parseDiscountPercent } = require("../src/amazonParser");
+const {
+  materialMatches,
+  parsePrice,
+  normalizeMaterialResults,
+  parseDiscountPercent,
+  selectCheapestWithColorCoverage
+} = require("../src/amazonParser");
 const { payloadToCsv } = require("../src/export");
 const { buildSearchPlan, isProfileLockError, pickStandardPriceText } = require("../src/search");
+const { extractColorProfile } = require("../src/colorProfile");
 
 test("parsePrice extracts currency and value", () => {
   assert.deepEqual(parsePrice("$29.99"), { currency: "$", value: 29.99 });
@@ -256,4 +263,64 @@ test("pickStandardPriceText falls back to the only price when no standard price 
   ]);
 
   assert.equal(priceText, "$17.99");
+});
+
+test("extractColorProfile detects specific shades inside a base color", () => {
+  assert.deepEqual(extractColorProfile("PLA filament Olive Green 1kg"), {
+    colorKey: "green",
+    colorLabel: "Green",
+    shadeKey: "olive-green",
+    shadeLabel: "Olive Green"
+  });
+
+  assert.deepEqual(extractColorProfile("PETG filament Light Blue spool 1kg"), {
+    colorKey: "blue",
+    colorLabel: "Blue",
+    shadeKey: "light-blue",
+    shadeLabel: "Light Blue"
+  });
+});
+
+test("selectCheapestWithColorCoverage expands the shortlist when it uncovers new colors or shades", () => {
+  const shortlisted = selectCheapestWithColorCoverage([
+    {
+      title: "PLA Black spool 1kg",
+      colorKey: "black",
+      colorLabel: "Black",
+      shadeKey: "black",
+      shadeLabel: "Black",
+      priceValue: 10,
+      totalValue: 10
+    },
+    {
+      title: "PLA Gray spool 1kg",
+      colorKey: "gray",
+      colorLabel: "Gray",
+      shadeKey: "gray",
+      shadeLabel: "Gray",
+      priceValue: 11,
+      totalValue: 11
+    },
+    {
+      title: "PLA Olive Green spool 1kg",
+      colorKey: "green",
+      colorLabel: "Green",
+      shadeKey: "olive-green",
+      shadeLabel: "Olive Green",
+      priceValue: 12,
+      totalValue: 12
+    },
+    {
+      title: "PLA Dark Green spool 1kg",
+      colorKey: "green",
+      colorLabel: "Green",
+      shadeKey: "dark-green",
+      shadeLabel: "Dark Green",
+      priceValue: 13,
+      totalValue: 13
+    }
+  ], 2, 4);
+
+  assert.equal(shortlisted.length, 4);
+  assert.deepEqual(shortlisted.map((item) => item.shadeLabel), ["Black", "Gray", "Olive Green", "Dark Green"]);
 });

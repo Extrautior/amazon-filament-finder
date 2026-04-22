@@ -34,20 +34,147 @@ let selectedHistoryJobId = null;
 let currentResultIndex = 0;
 let floatingMenusEnabled = false;
 
-const COLOR_GROUPS = [
-  { label: "Black", pattern: /\bblack\b/i },
-  { label: "White", pattern: /\bwhite\b/i },
-  { label: "Gray", pattern: /\bgray\b|\bgrey\b|\bsilver\b/i },
-  { label: "Blue", pattern: /\bblue\b|\bnavy\b|\bsapphire\b/i },
-  { label: "Red", pattern: /\bred\b|\bmaroon\b|\bcrimson\b/i },
-  { label: "Green", pattern: /\bgreen\b|\bolive\b/i },
-  { label: "Yellow", pattern: /\byellow\b|\bgold\b|\bamber\b/i },
-  { label: "Orange", pattern: /\borange\b|\bcopper\b/i },
-  { label: "Purple", pattern: /\bpurple\b|\bviolet\b|\blavender\b/i },
-  { label: "Pink", pattern: /\bpink\b|\brose\b/i },
-  { label: "Brown", pattern: /\bbrown\b|\bbronze\b|\bwood\b/i },
-  { label: "Transparent", pattern: /\bclear\b|\btransparent\b|\btranslucent\b/i },
-  { label: "Multi-Color", pattern: /\brainbow\b|\bmulti(?:-|\s)?color\b|\bmulti(?:-|\s)?colour\b|\bgalaxy\b/i }
+const COLOR_DEFINITIONS = [
+  {
+    key: "black",
+    label: "Black",
+    pattern: /\bblack\b|\bjet\s+black\b|\bcharcoal\b|\bonyx\b/i,
+    shades: [
+      { key: "jet-black", label: "Jet Black", pattern: /\bjet\s+black\b/i },
+      { key: "matte-black", label: "Matte Black", pattern: /\bmatte\s+black\b/i },
+      { key: "charcoal-black", label: "Charcoal Black", pattern: /\bcharcoal\b/i }
+    ]
+  },
+  {
+    key: "white",
+    label: "White",
+    pattern: /\bwhite\b|\bivory\b|\bcream\b/i,
+    shades: [
+      { key: "cool-white", label: "Cool White", pattern: /\bcool\s+white\b/i },
+      { key: "warm-white", label: "Warm White", pattern: /\bwarm\s+white\b/i },
+      { key: "ivory-white", label: "Ivory White", pattern: /\bivory\b/i }
+    ]
+  },
+  {
+    key: "gray",
+    label: "Gray",
+    pattern: /\bgray\b|\bgrey\b|\bsilver\b|\bspace\s+gray\b/i,
+    shades: [
+      { key: "light-gray", label: "Light Gray", pattern: /\blight\s+gr[ae]y\b/i },
+      { key: "dark-gray", label: "Dark Gray", pattern: /\bdark\s+gr[ae]y\b/i },
+      { key: "space-gray", label: "Space Gray", pattern: /\bspace\s+gr[ae]y\b/i },
+      { key: "silver-gray", label: "Silver Gray", pattern: /\bsilver\b/i }
+    ]
+  },
+  {
+    key: "blue",
+    label: "Blue",
+    pattern: /\bblue\b|\bnavy\b|\bsapphire\b|\bcyan\b|\bteal\b|\bsky\s+blue\b/i,
+    shades: [
+      { key: "light-blue", label: "Light Blue", pattern: /\blight\s+blue\b|\bsky\s+blue\b|\bbaby\s+blue\b/i },
+      { key: "dark-blue", label: "Dark Blue", pattern: /\bdark\s+blue\b/i },
+      { key: "navy-blue", label: "Navy Blue", pattern: /\bnavy\b/i },
+      { key: "royal-blue", label: "Royal Blue", pattern: /\broyal\s+blue\b/i },
+      { key: "teal-blue", label: "Teal Blue", pattern: /\bteal\b|\bcyan\b/i }
+    ]
+  },
+  {
+    key: "green",
+    label: "Green",
+    pattern: /\bgreen\b|\bolive\b|\bemerald\b|\bmint\b|\bforest\b|\blime\b/i,
+    shades: [
+      { key: "olive-green", label: "Olive Green", pattern: /\bolive\b|\barmy\s+green\b/i },
+      { key: "light-green", label: "Light Green", pattern: /\blight\s+green\b|\bpastel\s+green\b/i },
+      { key: "dark-green", label: "Dark Green", pattern: /\bdark\s+green\b|\bdeep\s+green\b/i },
+      { key: "forest-green", label: "Forest Green", pattern: /\bforest\b|\bhunter\s+green\b/i },
+      { key: "mint-green", label: "Mint Green", pattern: /\bmint\b/i },
+      { key: "lime-green", label: "Lime Green", pattern: /\blime\b|\bneon\s+green\b/i },
+      { key: "emerald-green", label: "Emerald Green", pattern: /\bemerald\b/i }
+    ]
+  },
+  {
+    key: "red",
+    label: "Red",
+    pattern: /\bred\b|\bmaroon\b|\bcrimson\b|\bburgundy\b/i,
+    shades: [
+      { key: "light-red", label: "Light Red", pattern: /\blight\s+red\b/i },
+      { key: "dark-red", label: "Dark Red", pattern: /\bdark\s+red\b/i },
+      { key: "crimson-red", label: "Crimson Red", pattern: /\bcrimson\b/i },
+      { key: "burgundy-red", label: "Burgundy Red", pattern: /\bburgundy\b|\bmaroon\b/i }
+    ]
+  },
+  {
+    key: "yellow",
+    label: "Yellow",
+    pattern: /\byellow\b|\bgold\b|\bamber\b/i,
+    shades: [
+      { key: "light-yellow", label: "Light Yellow", pattern: /\blight\s+yellow\b/i },
+      { key: "dark-yellow", label: "Dark Yellow", pattern: /\bdark\s+yellow\b|\bmustard\b/i },
+      { key: "gold-yellow", label: "Gold", pattern: /\bgold\b/i },
+      { key: "amber-yellow", label: "Amber", pattern: /\bamber\b/i }
+    ]
+  },
+  {
+    key: "orange",
+    label: "Orange",
+    pattern: /\borange\b|\bcopper\b/i,
+    shades: [
+      { key: "light-orange", label: "Light Orange", pattern: /\blight\s+orange\b|\bpeach\b/i },
+      { key: "dark-orange", label: "Dark Orange", pattern: /\bdark\s+orange\b|\bburnt\s+orange\b/i },
+      { key: "copper-orange", label: "Copper", pattern: /\bcopper\b/i }
+    ]
+  },
+  {
+    key: "purple",
+    label: "Purple",
+    pattern: /\bpurple\b|\bviolet\b|\blavender\b/i,
+    shades: [
+      { key: "light-purple", label: "Light Purple", pattern: /\blight\s+purple\b|\blavender\b/i },
+      { key: "dark-purple", label: "Dark Purple", pattern: /\bdark\s+purple\b|\bdeep\s+purple\b/i },
+      { key: "violet-purple", label: "Violet", pattern: /\bviolet\b/i }
+    ]
+  },
+  {
+    key: "pink",
+    label: "Pink",
+    pattern: /\bpink\b|\brose\b/i,
+    shades: [
+      { key: "light-pink", label: "Light Pink", pattern: /\blight\s+pink\b|\bpastel\s+pink\b/i },
+      { key: "dark-pink", label: "Dark Pink", pattern: /\bdark\s+pink\b|\bhot\s+pink\b/i },
+      { key: "rose-pink", label: "Rose Pink", pattern: /\brose\b/i }
+    ]
+  },
+  {
+    key: "brown",
+    label: "Brown",
+    pattern: /\bbrown\b|\bbronze\b|\bwood\b|\bchocolate\b/i,
+    shades: [
+      { key: "light-brown", label: "Light Brown", pattern: /\blight\s+brown\b|\btan\b/i },
+      { key: "dark-brown", label: "Dark Brown", pattern: /\bdark\s+brown\b|\bchocolate\b/i },
+      { key: "wood-brown", label: "Wood Brown", pattern: /\bwood\b/i },
+      { key: "bronze-brown", label: "Bronze Brown", pattern: /\bbronze\b/i }
+    ]
+  },
+  {
+    key: "transparent",
+    label: "Transparent",
+    pattern: /\bclear\b|\btransparent\b|\btranslucent\b/i,
+    shades: [
+      { key: "clear-transparent", label: "Clear", pattern: /\bclear\b/i },
+      { key: "frosted-transparent", label: "Frosted", pattern: /\bfrosted\b|\btranslucent\b/i }
+    ]
+  },
+  {
+    key: "multi-color",
+    label: "Multi-Color",
+    pattern: /\brainbow\b|\bmulti(?:-|\s)?color\b|\bmulti(?:-|\s)?colour\b|\bgalaxy\b|\bdual\s+color\b|\btri(?:-|\s)?color\b/i,
+    shades: [
+      { key: "rainbow-multi", label: "Rainbow", pattern: /\brainbow\b/i },
+      { key: "galaxy-multi", label: "Galaxy", pattern: /\bgalaxy\b/i },
+      { key: "dual-color-multi", label: "Dual Color", pattern: /\bdual\s+color\b/i },
+      { key: "tri-color-multi", label: "Tri-Color", pattern: /\btri(?:-|\s)?color\b/i }
+    ]
+  }
 ];
 
 function apiUrl(pathname) {
@@ -185,20 +312,105 @@ function openDownload(url) {
   window.location.assign(url);
 }
 
-function detectColorLabel(title) {
-  const normalizedTitle = String(title || "").trim();
-  for (const colorGroup of COLOR_GROUPS) {
-    if (colorGroup.pattern.test(normalizedTitle)) {
-      return colorGroup.label;
-    }
+function compareResultPrices(left, right) {
+  const leftMissingPrice = left.priceValue == null ? 1 : 0;
+  const rightMissingPrice = right.priceValue == null ? 1 : 0;
+  if (leftMissingPrice !== rightMissingPrice) {
+    return leftMissingPrice - rightMissingPrice;
   }
-  return "Other Colors";
+  if (left.priceValue !== right.priceValue) {
+    return (left.priceValue ?? Number.POSITIVE_INFINITY) - (right.priceValue ?? Number.POSITIVE_INFINITY);
+  }
+  if (left.totalValue !== right.totalValue) {
+    return (left.totalValue ?? Number.POSITIVE_INFINITY) - (right.totalValue ?? Number.POSITIVE_INFINITY);
+  }
+  return String(left.title || "").localeCompare(String(right.title || ""));
+}
+
+function detectColorProfile(item) {
+  if (item && item.colorLabel && item.shadeLabel) {
+    return {
+      colorKey: item.colorKey || slugify(item.colorLabel),
+      colorLabel: item.colorLabel,
+      shadeKey: item.shadeKey || slugify(item.shadeLabel),
+      shadeLabel: item.shadeLabel
+    };
+  }
+
+  const normalizedTitle = String(item?.title || "").trim();
+  for (const colorDefinition of COLOR_DEFINITIONS) {
+    if (!colorDefinition.pattern.test(normalizedTitle)) {
+      continue;
+    }
+
+    const shade = colorDefinition.shades.find((entry) => entry.pattern.test(normalizedTitle));
+    return {
+      colorKey: colorDefinition.key,
+      colorLabel: colorDefinition.label,
+      shadeKey: shade ? shade.key : colorDefinition.key,
+      shadeLabel: shade ? shade.label : colorDefinition.label
+    };
+  }
+
+  return {
+    colorKey: "other-colors",
+    colorLabel: "Other Colors",
+    shadeKey: "other-colors",
+    shadeLabel: "Other Colors"
+  };
+}
+
+function compareColorLabels(leftLabel, rightLabel) {
+  const leftIndex = COLOR_DEFINITIONS.findIndex((entry) => entry.label === leftLabel);
+  const rightIndex = COLOR_DEFINITIONS.findIndex((entry) => entry.label === rightLabel);
+
+  if (leftLabel === "Other Colors") {
+    return 1;
+  }
+  if (rightLabel === "Other Colors") {
+    return -1;
+  }
+  if (leftIndex !== -1 && rightIndex !== -1) {
+    return leftIndex - rightIndex;
+  }
+  return leftLabel.localeCompare(rightLabel);
+}
+
+function buildShadeGroups(items) {
+  const buckets = new Map();
+  for (const item of items) {
+    const profile = detectColorProfile(item);
+    const shadeKey = profile.shadeKey || profile.colorKey;
+    if (!buckets.has(shadeKey)) {
+      buckets.set(shadeKey, {
+        key: shadeKey,
+        label: profile.shadeLabel,
+        items: []
+      });
+    }
+    buckets.get(shadeKey).items.push(item);
+  }
+
+  return [...buckets.values()]
+    .map((group) => ({
+      ...group,
+      items: [...group.items].sort(compareResultPrices)
+    }))
+    .sort((left, right) => {
+      const leftCheapest = left.items[0];
+      const rightCheapest = right.items[0];
+      if (!leftCheapest || !rightCheapest) {
+        return left.label.localeCompare(right.label);
+      }
+      return compareResultPrices(leftCheapest, rightCheapest);
+    });
 }
 
 function groupItemsByColor(items) {
   const buckets = new Map();
   for (const item of items) {
-    const colorLabel = detectColorLabel(item.title);
+    const profile = detectColorProfile(item);
+    const colorLabel = profile.colorLabel;
     if (!buckets.has(colorLabel)) {
       buckets.set(colorLabel, []);
     }
@@ -207,15 +419,13 @@ function groupItemsByColor(items) {
 
   return [...buckets.entries()]
     .sort(([leftLabel], [rightLabel]) => {
-      if (leftLabel === "Other Colors") {
-        return 1;
-      }
-      if (rightLabel === "Other Colors") {
-        return -1;
-      }
-      return leftLabel.localeCompare(rightLabel);
+      return compareColorLabels(leftLabel, rightLabel);
     })
-    .map(([label, groupedItems]) => ({ label, items: groupedItems }));
+    .map(([label, groupedItems]) => ({
+      label,
+      items: [...groupedItems].sort(compareResultPrices),
+      shades: buildShadeGroups(groupedItems)
+    }));
 }
 
 function summarizeHistoryItem(item) {
@@ -252,11 +462,13 @@ function renderHistory(items) {
 function cardForResult(item, index) {
   const amazonUrl = safeAmazonUrl(item.url);
   const imageUrl = safeImageUrl(item.imageUrl);
+  const colorProfile = detectColorProfile(item);
   return `
-    <article class="result-card">
+    <article class="result-card" data-shade-label="${escapeHtml(colorProfile.shadeLabel)}">
       <div class="result-top">
         <span class="result-rank">#${index + 1}</span>
         <span class="pill pill-free">Free shipping</span>
+        ${colorProfile.shadeLabel !== colorProfile.colorLabel ? `<span class="pill pill-shade">${escapeHtml(colorProfile.shadeLabel)}</span>` : ""}
         ${item.hasDiscount ? `<span class="pill pill-deal">${escapeHtml(item.discountPercent != null ? `Save ${item.discountPercent}%` : "Discount")}</span>` : ""}
       </div>
       ${imageUrl ? `<div class="result-image-wrap"><img class="result-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" /></div>` : ""}
@@ -294,12 +506,29 @@ function sectionForMaterial(section, items) {
   const cards = items.length
     ? colorGroups.map((colorGroup) => {
         const colorGroupId = `${slugify(section.key || section.label)}-${slugify(colorGroup.label)}`;
+        const shadeFilterId = `${colorGroupId}-shade-filter`;
+        const visibleShadeOptions = colorGroup.shades.filter((shadeGroup) => shadeGroup.label !== colorGroup.label);
         return `
         <section class="color-group">
           <div id="${escapeHtml(colorGroupId)}" class="color-group-anchor" aria-hidden="true"></div>
           <div class="color-group-header">
-            <h3>${escapeHtml(colorGroup.label)}</h3>
-            <span>${colorGroup.items.length} result${colorGroup.items.length === 1 ? "" : "s"}</span>
+            <div class="color-group-title-wrap">
+              <h3>${escapeHtml(colorGroup.label)}</h3>
+              ${visibleShadeOptions.length ? `
+                <label class="shade-select-wrap" for="${escapeHtml(shadeFilterId)}">
+                  <span>Shade</span>
+                  <select id="${escapeHtml(shadeFilterId)}" class="shade-select" data-shade-filter="${escapeHtml(colorGroupId)}">
+                    <option value="all">All shades</option>
+                    ${colorGroup.shades.map((shadeGroup) => `
+                      <option value="${escapeHtml(shadeGroup.label)}">
+                        ${escapeHtml(shadeGroup.label)} (${shadeGroup.items.length})
+                      </option>
+                    `).join("")}
+                  </select>
+                </label>
+              ` : ""}
+            </div>
+            <span class="color-group-count" data-color-count="${escapeHtml(colorGroupId)}">${colorGroup.items.length} result${colorGroup.items.length === 1 ? "" : "s"}</span>
           </div>
           <div class="${gridClassName(colorGroup.items.length, "color-result-grid")}">
             ${colorGroup.items.map((item, index) => cardForResult(item, index)).join("")}
@@ -331,7 +560,7 @@ function sectionForMaterial(section, items) {
     <article class="material-card">
       <div class="material-header">
         <h2>${escapeHtml(section.label)} Cheapest Results</h2>
-        <span>${items.length} result${items.length === 1 ? "" : "s"}</span>
+        <span>${items.length} result${items.length === 1 ? "" : "s"} across ${colorGroups.length} color group${colorGroups.length === 1 ? "" : "s"}</span>
       </div>
       <div class="material-layout${colorGroups.length ? " has-color-sidebar" : ""}">
         ${colorJumpNav}
@@ -493,6 +722,43 @@ function renderFloatingColorNav(activeCard) {
   updateFloatingMenuVisibility();
 }
 
+function updateColorGroupCount(groupId, visibleCount) {
+  const countEl = resultsEl.querySelector(`[data-color-count="${groupId}"]`);
+  if (countEl) {
+    countEl.textContent = `${visibleCount} result${visibleCount === 1 ? "" : "s"}`;
+  }
+}
+
+function wireShadeFilters() {
+  for (const shadeSelect of resultsEl.querySelectorAll("[data-shade-filter]")) {
+    shadeSelect.addEventListener("change", () => {
+      const groupId = shadeSelect.dataset.shadeFilter;
+      if (!groupId) {
+        return;
+      }
+
+      const colorGroup = shadeSelect.closest(".color-group");
+      if (!colorGroup) {
+        return;
+      }
+
+      const selectedShade = shadeSelect.value;
+      const cards = [...colorGroup.querySelectorAll(".result-card")];
+      let visibleCount = 0;
+
+      for (const card of cards) {
+        const matches = selectedShade === "all" || card.dataset.shadeLabel === selectedShade;
+        card.hidden = !matches;
+        if (matches) {
+          visibleCount += 1;
+        }
+      }
+
+      updateColorGroupCount(groupId, visibleCount);
+    });
+  }
+}
+
 function syncResultsCarousel() {
   const cards = resultCards();
   const total = cards.length;
@@ -558,6 +824,7 @@ function renderResults(payload) {
     const discountedSection = discountSectionForMaterial(section, payload.discountedResultsByMaterial?.[section.key] || []);
     return `${cheapestSection}${discountedSection}`;
   }).join("");
+  wireShadeFilters();
   currentResultIndex = 0;
   syncResultsCarousel();
   renderWarnings(payload.warnings || []);

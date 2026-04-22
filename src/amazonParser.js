@@ -1,4 +1,5 @@
 const { RESULT_LIMIT } = require("./config");
+const { extractColorProfile } = require("./colorProfile");
 
 function parsePrice(text) {
   if (!text) {
@@ -106,8 +107,24 @@ function computeTotal(priceValue, shippingValue, importFeesValue) {
   return [priceValue, shippingValue, importFeesValue].reduce((sum, value) => sum + (value || 0), 0);
 }
 
+function compareCheapestResults(left, right) {
+  const leftMissingPrice = left.priceValue == null ? 1 : 0;
+  const rightMissingPrice = right.priceValue == null ? 1 : 0;
+  if (leftMissingPrice !== rightMissingPrice) {
+    return leftMissingPrice - rightMissingPrice;
+  }
+  if (left.priceValue !== right.priceValue) {
+    return (left.priceValue ?? Number.POSITIVE_INFINITY) - (right.priceValue ?? Number.POSITIVE_INFINITY);
+  }
+  if (left.totalValue !== right.totalValue) {
+    return left.totalValue - right.totalValue;
+  }
+  return left.title.localeCompare(right.title);
+}
+
 function normalizeResult(material, raw, options = {}) {
   const title = cleanText(raw.title || "");
+  const colorProfile = extractColorProfile(title);
   const availabilityNote = cleanText([raw.shippingText, raw.deliveryText, raw.badgeText].filter(Boolean).join(" | "));
   const discountText = cleanText(raw.discountText || "");
   const shipping = parsePrice(cleanText(raw.shippingText));
@@ -136,6 +153,10 @@ function normalizeResult(material, raw, options = {}) {
   return {
     material,
     title,
+    colorKey: colorProfile.colorKey,
+    colorLabel: colorProfile.colorLabel,
+    shadeKey: colorProfile.shadeKey,
+    shadeLabel: colorProfile.shadeLabel,
     asin: raw.asin || extractAsin(raw.url),
     url: raw.url,
     imageUrl: raw.imageUrl || "",
@@ -166,22 +187,40 @@ function dedupeAndSort(results) {
     }
   }
 
-  return [...deduped.values()]
-    .sort((a, b) => {
-      const aMissingPrice = a.priceValue == null ? 1 : 0;
-      const bMissingPrice = b.priceValue == null ? 1 : 0;
-      if (aMissingPrice !== bMissingPrice) {
-        return aMissingPrice - bMissingPrice;
-      }
-      if (a.priceValue !== b.priceValue) {
-        return (a.priceValue ?? Number.POSITIVE_INFINITY) - (b.priceValue ?? Number.POSITIVE_INFINITY);
-      }
-      if (a.totalValue !== b.totalValue) {
-        return a.totalValue - b.totalValue;
-      }
-      return a.title.localeCompare(b.title);
-    })
-    .slice(0, RESULT_LIMIT);
+  return selectCheapestWithColorCoverage([...deduped.values()]);
+}
+
+function selectCheapestWithColorCoverage(results, limit = RESULT_LIMIT, extraCoverageLimit = 12) {
+  const sortedResults = [...results].sort(compareCheapestResults);
+  if (sortedResults.length <= limit) {
+    return sortedResults;
+  }
+
+  const selected = sortedResults.slice(0, limit);
+  const seenColors = new Set(selected.map((result) => result.colorKey || "other-colors"));
+  const seenShades = new Set(selected.map((result) => result.shadeKey || result.colorKey || "other-colors"));
+  const extras = [];
+
+  for (const result of sortedResults.slice(limit)) {
+    if (extras.length >= extraCoverageLimit) {
+      break;
+    }
+
+    const colorKey = result.colorKey || "other-colors";
+    const shadeKey = result.shadeKey || colorKey;
+    const addsMissingColor = colorKey !== "other-colors" && !seenColors.has(colorKey);
+    const addsMissingShade = shadeKey !== colorKey && !seenShades.has(shadeKey);
+
+    if (!addsMissingColor && !addsMissingShade) {
+      continue;
+    }
+
+    extras.push(result);
+    seenColors.add(colorKey);
+    seenShades.add(shadeKey);
+  }
+
+  return [...selected, ...extras].sort(compareCheapestResults);
 }
 
 function dedupeAndSortDiscounted(results) {
@@ -235,6 +274,7 @@ function normalizeMaterialResults(material, rawResults, options = {}) {
 }
 
 module.exports = {
+  compareCheapestResults,
   computeTotal,
   dedupeAndSort,
   dedupeAndSortDiscounted,
@@ -243,5 +283,6 @@ module.exports = {
   materialMatches,
   normalizeMaterialResults,
   parseDiscountPercent,
-  parsePrice
+  parsePrice,
+  selectCheapestWithColorCoverage
 };

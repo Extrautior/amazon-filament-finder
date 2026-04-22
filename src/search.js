@@ -39,6 +39,8 @@ class SessionBusyError extends Error {
 }
 
 const SESSION_LOCK_FILES = ["SingletonLock", "SingletonSocket", "SingletonCookie"];
+const MAX_SEARCH_RESULT_PAGES = 6;
+const MAX_RAW_RESULT_ITEMS = 180;
 
 function getChromium() {
   return require("playwright").chromium;
@@ -433,7 +435,7 @@ async function searchMaterial(context, searchTarget) {
     let nextPageHref = await page.locator("a.s-pagination-next").first().getAttribute("href").catch(() => null);
     let pageCount = 1;
 
-    while (nextPageHref && rawItems.length < 120 && pageCount < 4) {
+    while (nextPageHref && rawItems.length < MAX_RAW_RESULT_ITEMS && pageCount < MAX_SEARCH_RESULT_PAGES) {
       const nextPage = await context.newPage();
       try {
         await nextPage.goto(resolveAmazonUrl(nextPageHref), {
