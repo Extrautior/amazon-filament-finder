@@ -1,26 +1,26 @@
 :root {
-  color-scheme: light;
-  --bg: #f3efe8;
-  --bg-accent: #ede3d0;
-  --panel: rgba(255, 252, 247, 0.92);
-  --panel-strong: rgba(255, 255, 255, 0.98);
-  --panel-soft: rgba(246, 239, 229, 0.78);
-  --line: rgba(58, 46, 30, 0.12);
-  --line-strong: rgba(58, 46, 30, 0.18);
-  --ink: #1f1710;
-  --muted: #675747;
-  --muted-soft: #8e7b67;
-  --accent: #b85a33;
-  --accent-strong: #8c3415;
-  --accent-soft: #f1d1ba;
-  --success-bg: #e5f4e9;
-  --success-ink: #1f6e38;
-  --deal-bg: #fff0cb;
-  --deal-ink: #9b5800;
-  --warn-bg: #fff2db;
-  --warn-line: #efc16a;
-  --shadow-lg: 0 24px 70px rgba(60, 39, 16, 0.12);
-  --shadow-md: 0 14px 34px rgba(60, 39, 16, 0.09);
+  color-scheme: dark;
+  --bg: #12161d;
+  --bg-accent: #1a2029;
+  --panel: rgba(27, 33, 43, 0.92);
+  --panel-strong: rgba(31, 39, 50, 0.98);
+  --panel-soft: rgba(36, 44, 58, 0.78);
+  --line: rgba(221, 229, 242, 0.08);
+  --line-strong: rgba(221, 229, 242, 0.14);
+  --ink: #f3f5f7;
+  --muted: #a7b0bc;
+  --muted-soft: #7f8a98;
+  --accent: #d07a49;
+  --accent-strong: #efb07f;
+  --accent-soft: rgba(208, 122, 73, 0.2);
+  --success-bg: rgba(50, 112, 79, 0.22);
+  --success-ink: #8ce0ab;
+  --deal-bg: rgba(177, 120, 34, 0.22);
+  --deal-ink: #ffd287;
+  --warn-bg: rgba(120, 84, 20, 0.24);
+  --warn-line: rgba(239, 193, 106, 0.45);
+  --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.34);
+  --shadow-md: 0 14px 34px rgba(0, 0, 0, 0.24);
   --radius-xl: 28px;
   --radius-lg: 22px;
   --radius-md: 18px;
@@ -40,9 +40,9 @@ body {
   color: var(--ink);
   font-family: "Aptos", "Segoe UI", sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(237, 182, 111, 0.28), transparent 26%),
-    radial-gradient(circle at top right, rgba(191, 95, 57, 0.12), transparent 22%),
-    linear-gradient(180deg, #f8f4ee 0%, var(--bg) 52%, var(--bg-accent) 100%);
+    radial-gradient(circle at top left, rgba(208, 122, 73, 0.16), transparent 24%),
+    radial-gradient(circle at top right, rgba(74, 119, 182, 0.14), transparent 20%),
+    linear-gradient(180deg, #171c24 0%, var(--bg) 52%, var(--bg-accent) 100%);
 }
 
 button,
@@ -146,7 +146,7 @@ h1 {
   padding: 16px 18px;
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 237, 227, 0.86));
+  background: linear-gradient(180deg, rgba(40, 47, 59, 0.96), rgba(31, 39, 50, 0.88));
   box-shadow: var(--shadow-md);
 }
 
@@ -163,7 +163,7 @@ h1 {
   padding: 18px;
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
-  background: var(--panel-strong);
+  background: linear-gradient(180deg, rgba(35, 43, 56, 0.98), rgba(28, 35, 47, 0.94));
   box-shadow: var(--shadow-md);
 }
 
@@ -184,10 +184,10 @@ input[type="password"],
   width: 100%;
   border-radius: 16px;
   border: 1px solid var(--line-strong);
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(18, 24, 33, 0.96);
   color: var(--ink);
   padding: 14px 16px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 input[type="password"]:focus,
@@ -227,9 +227,9 @@ button:disabled {
 #export-json,
 #logout-button,
 .material-search {
-  background: linear-gradient(135deg, #fbf4e8 0%, #ecd8bb 100%);
+  background: linear-gradient(135deg, #2c3441 0%, #212936 100%);
   color: var(--ink);
-  box-shadow: 0 12px 24px rgba(83, 58, 28, 0.1);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
 }
 
 .controls-panel {
@@ -311,7 +311,7 @@ button:disabled {
   padding: 16px;
   border-radius: 18px;
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 237, 227, 0.88));
+  background: linear-gradient(180deg, rgba(41, 49, 62, 0.96), rgba(31, 39, 50, 0.88));
 }
 
 .meta-label {
@@ -348,7 +348,7 @@ button:disabled {
   overflow: hidden;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: rgba(139, 97, 48, 0.12);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .progress-fill {
@@ -396,14 +396,14 @@ button:disabled {
   padding: 14px 16px;
   border-radius: 18px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(32, 40, 52, 0.9);
   color: var(--ink);
-  box-shadow: 0 10px 24px rgba(95, 60, 24, 0.08);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
 }
 
 .history-item.active {
-  border-color: rgba(184, 90, 51, 0.34);
-  background: linear-gradient(135deg, rgba(255, 244, 233, 0.98), rgba(244, 225, 202, 0.92));
+  border-color: rgba(208, 122, 73, 0.32);
+  background: linear-gradient(135deg, rgba(59, 45, 37, 0.98), rgba(44, 52, 65, 0.92));
 }
 
 .history-item span {
@@ -487,7 +487,7 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 20px;
   padding: 16px;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(31, 39, 50, 0.9);
 }
 
 .result-top {
@@ -527,7 +527,7 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 16px;
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(243, 236, 225, 0.9));
+  background: linear-gradient(180deg, rgba(45, 53, 67, 0.96), rgba(28, 35, 47, 0.9));
 }
 
 .result-image {
