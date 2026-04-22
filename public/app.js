@@ -90,6 +90,14 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+function slugify(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "group";
+}
+
 function safeAmazonUrl(value) {
   try {
     const normalized = String(value || "").trim();
@@ -278,9 +286,13 @@ function cardForResult(item, index) {
 }
 
 function sectionForMaterial(section, items) {
+  const colorGroups = groupItemsByColor(items);
   const cards = items.length
-    ? groupItemsByColor(items).map((colorGroup) => `
+    ? colorGroups.map((colorGroup) => {
+        const colorGroupId = `${slugify(section.key || section.label)}-${slugify(colorGroup.label)}`;
+        return `
         <section class="color-group">
+          <div id="${escapeHtml(colorGroupId)}" class="color-group-anchor" aria-hidden="true"></div>
           <div class="color-group-header">
             <h3>${escapeHtml(colorGroup.label)}</h3>
             <span>${colorGroup.items.length} result${colorGroup.items.length === 1 ? "" : "s"}</span>
@@ -289,8 +301,27 @@ function sectionForMaterial(section, items) {
             ${colorGroup.items.map((item, index) => cardForResult(item, index)).join("")}
           </div>
         </section>
-      `).join("")
+      `;
+      }).join("")
     : `<p class="empty">No free-shipping ${escapeHtml(section.label)} results found.</p>`;
+
+  const colorJumpNav = colorGroups.length
+    ? `
+      <div class="color-jump-nav">
+        <span class="color-jump-label">Jump to color</span>
+        <div class="color-jump-actions">
+          ${colorGroups.map((colorGroup) => {
+            const colorGroupId = `${slugify(section.key || section.label)}-${slugify(colorGroup.label)}`;
+            return `
+              <button class="color-jump-button" type="button" data-color-target="${escapeHtml(colorGroupId)}">
+                ${escapeHtml(colorGroup.label)}
+              </button>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `
+    : "";
 
   return `
     <article class="material-card">
@@ -298,6 +329,7 @@ function sectionForMaterial(section, items) {
         <h2>${escapeHtml(section.label)} Cheapest Results</h2>
         <span>${items.length} result${items.length === 1 ? "" : "s"}</span>
       </div>
+      ${colorJumpNav}
       <div class="color-groups">
         ${cards}
       </div>
@@ -628,6 +660,19 @@ exportCsvButton.addEventListener("click", () => openDownload("/api/export.csv"))
 exportJsonButton.addEventListener("click", () => openDownload("/api/export.json"));
 resultsPrevButton.addEventListener("click", () => moveResultsCarousel(-1));
 resultsNextButton.addEventListener("click", () => moveResultsCarousel(1));
+resultsEl.addEventListener("click", (event) => {
+  const jumpButton = event.target.closest("[data-color-target]");
+  if (!jumpButton) {
+    return;
+  }
+
+  const target = document.getElementById(jumpButton.dataset.colorTarget || "");
+  if (!target) {
+    return;
+  }
+
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+});
 
 async function initializeApp() {
   const unlocked = await updateSessionState();
