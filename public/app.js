@@ -394,6 +394,14 @@ function currentResultCard() {
   return resultCards()[currentResultIndex] || null;
 }
 
+function scrollViewportToResults() {
+  const shellTop = window.scrollY + resultsShellEl.getBoundingClientRect().top - 24;
+  window.scrollTo({
+    top: Math.max(0, shellTop),
+    behavior: "smooth"
+  });
+}
+
 function updateFloatingMenuVisibility() {
   const hasResults = !resultsShellEl.hidden && resultCards().length > 0;
   const shellRect = resultsShellEl.getBoundingClientRect();
@@ -440,6 +448,7 @@ function renderFloatingResultsNav(cards) {
     indicator.addEventListener("click", () => {
       currentResultIndex = Number(indicator.dataset.resultIndex) || 0;
       syncResultsCarousel();
+      scrollViewportToResults();
     });
   }
 
