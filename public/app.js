@@ -5,10 +5,8 @@ const passwordInput = document.getElementById("password");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
 const resultsShellEl = document.getElementById("results-shell");
-const resultsPrevButton = document.getElementById("results-prev");
-const resultsNextButton = document.getElementById("results-next");
-const resultsPositionEl = document.getElementById("results-position");
-const resultsIndicatorsEl = document.getElementById("results-indicators");
+const floatingResultsNavEl = document.getElementById("floating-results-nav");
+const floatingColorNavEl = document.getElementById("floating-color-nav");
 const warningsEl = document.getElementById("warnings");
 const metaEl = document.getElementById("meta");
 const searchedAtEl = document.getElementById("searched-at");
@@ -386,6 +384,78 @@ function resultCards() {
   return [...resultsEl.querySelectorAll(".material-card")];
 }
 
+function currentResultCard() {
+  return resultCards()[currentResultIndex] || null;
+}
+
+function renderFloatingResultsNav(cards) {
+  if (!cards.length) {
+    floatingResultsNavEl.hidden = true;
+    floatingResultsNavEl.innerHTML = "";
+    return;
+  }
+
+  floatingResultsNavEl.hidden = false;
+  floatingResultsNavEl.innerHTML = `
+    <div class="floating-panel-card">
+      <p class="toolbar-label">Result Navigator</p>
+      <h2>Browse Groups</h2>
+      <div class="results-indicators results-indicators-floating">
+        ${cards.map((card, index) => `
+          <button
+            class="results-indicator${index === currentResultIndex ? " active" : ""}"
+            type="button"
+            data-result-index="${index}"
+            aria-label="Open ${escapeHtml(resultSlideLabel(card, index))}"
+            title="${escapeHtml(resultSlideLabel(card, index))}"
+          >
+            <span class="results-indicator-index">${index + 1}</span>
+            <span class="results-indicator-label">${escapeHtml(resultSlideLabel(card, index))}</span>
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+
+  for (const indicator of floatingResultsNavEl.querySelectorAll("[data-result-index]")) {
+    indicator.addEventListener("click", () => {
+      currentResultIndex = Number(indicator.dataset.resultIndex) || 0;
+      syncResultsCarousel();
+    });
+  }
+}
+
+function renderFloatingColorNav(activeCard) {
+  if (!activeCard) {
+    floatingColorNavEl.hidden = true;
+    floatingColorNavEl.innerHTML = "";
+    return;
+  }
+
+  const jumpButtons = [...activeCard.querySelectorAll("[data-color-target]")];
+  if (!jumpButtons.length) {
+    floatingColorNavEl.hidden = true;
+    floatingColorNavEl.innerHTML = "";
+    return;
+  }
+
+  const sectionTitle = activeCard.querySelector(".material-header h2")?.textContent?.trim() || "Colors";
+  floatingColorNavEl.hidden = false;
+  floatingColorNavEl.innerHTML = `
+    <div class="floating-panel-card">
+      <p class="toolbar-label">Color Navigator</p>
+      <h2>${escapeHtml(sectionTitle)}</h2>
+      <div class="color-jump-actions color-jump-actions-floating">
+        ${jumpButtons.map((button) => `
+          <button class="color-jump-button" type="button" data-color-target="${escapeHtml(button.dataset.colorTarget || "")}">
+            ${escapeHtml(button.textContent || "")}
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function syncResultsCarousel() {
   const cards = resultCards();
   const total = cards.length;
@@ -393,10 +463,8 @@ function syncResultsCarousel() {
 
   resultsShellEl.hidden = !hasResults;
   if (!hasResults) {
-    resultsIndicatorsEl.innerHTML = "";
-    resultsPositionEl.textContent = "0 / 0";
-    resultsPrevButton.disabled = true;
-    resultsNextButton.disabled = true;
+    renderFloatingResultsNav([]);
+    renderFloatingColorNav(null);
     currentResultIndex = 0;
     return;
   }
@@ -416,29 +484,8 @@ function syncResultsCarousel() {
     });
   }
 
-  resultsPositionEl.textContent = `${currentResultIndex + 1} / ${total}`;
-  resultsPrevButton.disabled = currentResultIndex === 0;
-  resultsNextButton.disabled = currentResultIndex >= total - 1;
-
-  resultsIndicatorsEl.innerHTML = cards.map((card, index) => `
-    <button
-      class="results-indicator${index === currentResultIndex ? " active" : ""}"
-      type="button"
-      data-result-index="${index}"
-      aria-label="Open ${escapeHtml(resultSlideLabel(card, index))}"
-      title="${escapeHtml(resultSlideLabel(card, index))}"
-    >
-      <span class="results-indicator-index">${index + 1}</span>
-      <span class="results-indicator-label">${escapeHtml(resultSlideLabel(card, index))}</span>
-    </button>
-  `).join("");
-
-  for (const indicator of resultsIndicatorsEl.querySelectorAll("[data-result-index]")) {
-    indicator.addEventListener("click", () => {
-      currentResultIndex = Number(indicator.dataset.resultIndex) || 0;
-      syncResultsCarousel();
-    });
-  }
+  renderFloatingResultsNav(cards);
+  renderFloatingColorNav(activeCard);
 }
 
 function moveResultsCarousel(step) {
@@ -672,9 +719,20 @@ logoutButton.addEventListener("click", async () => {
 });
 exportCsvButton.addEventListener("click", () => openDownload("/api/export.csv"));
 exportJsonButton.addEventListener("click", () => openDownload("/api/export.json"));
-resultsPrevButton.addEventListener("click", () => moveResultsCarousel(-1));
-resultsNextButton.addEventListener("click", () => moveResultsCarousel(1));
 resultsEl.addEventListener("click", (event) => {
+  const jumpButton = event.target.closest("[data-color-target]");
+  if (!jumpButton) {
+    return;
+  }
+
+  const target = document.getElementById(jumpButton.dataset.colorTarget || "");
+  if (!target) {
+    return;
+  }
+
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+floatingColorNavEl.addEventListener("click", (event) => {
   const jumpButton = event.target.closest("[data-color-target]");
   if (!jumpButton) {
     return;
