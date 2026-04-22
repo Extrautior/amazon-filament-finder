@@ -11,8 +11,14 @@ const marketplaceEl = document.getElementById("marketplace");
 const sessionStateEl = document.getElementById("session-state");
 const exportCsvButton = document.getElementById("export-csv");
 const exportJsonButton = document.getElementById("export-json");
+const progressCardEl = document.getElementById("progress-card");
+const progressFillEl = document.getElementById("progress-fill");
+const progressLabelEl = document.getElementById("progress-label");
+const progressPercentEl = document.getElementById("progress-percent");
+const progressMetaEl = document.getElementById("progress-meta");
 
 const MATERIALS = ["PLA", "PETG", "ABS", "TPU"];
+let searchProgressTimer = null;
 
 function money(value, currency) {
   if (value == null) {
@@ -79,6 +85,56 @@ function setLockedState(locked) {
   button.disabled = locked;
   exportCsvButton.disabled = locked || exportCsvButton.disabled;
   exportJsonButton.disabled = locked || exportJsonButton.disabled;
+}
+
+function stopSearchProgressPolling() {
+  if (searchProgressTimer) {
+    window.clearInterval(searchProgressTimer);
+    searchProgressTimer = null;
+  }
+}
+
+function renderSearchProgress(payload) {
+  const percent = Math.max(0, Math.min(100, Number(payload.percent) || 0));
+  progressCardEl.hidden = false;
+  progressFillEl.style.width = `${percent}%`;
+  progressPercentEl.textContent = `${Math.round(percent)}%`;
+  progressLabelEl.textContent = payload.message || "Searching Amazon…";
+  progressMetaEl.textContent = payload.activeMaterial
+    ? `Currently working on ${payload.activeMaterial}.`
+    : payload.running
+      ? "Search is still active."
+      : payload.phase === "complete"
+        ? "The latest search finished."
+        : "Waiting for the next search.";
+}
+
+async function refreshSearchProgress() {
+  try {
+    const response = await fetch("/api/search-status");
+    if (response.status === 401) {
+      stopSearchProgressPolling();
+      progressCardEl.hidden = true;
+      return;
+    }
+
+    const payload = await response.json();
+    renderSearchProgress(payload);
+
+    if (!payload.running) {
+      stopSearchProgressPolling();
+    }
+  } catch {
+    // Keep the existing UI state if the poll briefly fails.
+  }
+}
+
+function startSearchProgressPolling() {
+  stopSearchProgressPolling();
+  void refreshSearchProgress();
+  searchProgressTimer = window.setInterval(() => {
+    void refreshSearchProgress();
+  }, 1500);
 }
 
 function openDownload(url) {
@@ -202,6 +258,13 @@ async function runSearch() {
   setLockedState(true);
   setExportEnabled(false);
   statusEl.textContent = "Searching Amazon. The shared browser session in the container is collecting prices now.";
+  renderSearchProgress({
+    percent: 1,
+    message: "Starting search…",
+    activeMaterial: null,
+    running: true
+  });
+  startSearchProgressPolling();
 
   try {
     const response = await fetch("/api/search", { method: "POST" });
@@ -215,11 +278,13 @@ async function runSearch() {
     }
 
     renderResults(payload);
+    await refreshSearchProgress();
     await updateSessionState();
     statusEl.textContent = "Search complete.";
   } catch (error) {
     statusEl.textContent = error.message;
     renderWarnings([error.message]);
+    await refreshSearchProgress();
   } finally {
     button.disabled = false;
   }
@@ -251,3 +316,4 @@ exportCsvButton.addEventListener("click", () => openDownload("/api/export.csv"))
 exportJsonButton.addEventListener("click", () => openDownload("/api/export.json"));
 
 void updateSessionState();
+void refreshSearchProgress();

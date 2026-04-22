@@ -32,6 +32,16 @@
           <button id="logout-button" type="button">Log Out</button>
           <p id="status">Ready.</p>
         </div>
+        <section class="progress-card" id="progress-card" hidden>
+          <div class="progress-head">
+            <strong id="progress-label">Preparing search…</strong>
+            <span id="progress-percent">0%</span>
+          </div>
+          <div class="progress-track" aria-hidden="true">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <p class="progress-meta" id="progress-meta">Waiting to start.</p>
+        </section>
         <p class="hint">
           The hosted app reuses one shared Amazon session inside the server container. If results stop working, ask the
           host to refresh the Amazon session.

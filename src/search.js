@@ -294,10 +294,33 @@ async function searchMaterial(context, material) {
   }
 }
 
-async function runSearch() {
+function emitProgress(onProgress, update) {
+  if (typeof onProgress === "function") {
+    onProgress({
+      timestamp: new Date().toISOString(),
+      ...update
+    });
+  }
+}
+
+async function runSearch(options = {}) {
+  const { onProgress } = options;
   let context;
   try {
+    emitProgress(onProgress, {
+      phase: "starting",
+      percent: 5,
+      activeMaterial: null,
+      message: "Opening the shared Amazon browser session."
+    });
     context = await launchSessionContext();
+
+    emitProgress(onProgress, {
+      phase: "checking-session",
+      percent: 12,
+      activeMaterial: null,
+      message: "Checking the saved Amazon login session."
+    });
     const sessionStatus = await inspectAmazonSession(context);
     if (sessionStatus.status !== "ready") {
       throw new SessionRequiredError(sessionStatus.message);
@@ -311,18 +334,45 @@ async function runSearch() {
       TPU: []
     };
 
-    for (const material of MATERIALS) {
+    for (const [index, material] of MATERIALS.entries()) {
+      const basePercent = 18 + Math.floor((index / MATERIALS.length) * 72);
+      emitProgress(onProgress, {
+        phase: "material-start",
+        percent: basePercent,
+        activeMaterial: material,
+        message: `Searching ${material} listings on Amazon.`
+      });
+
       try {
         const materialResults = await searchMaterial(context, material);
         resultsByMaterial[material] = materialResults.results;
         warnings.push(...materialResults.warnings);
+        emitProgress(onProgress, {
+          phase: "material-complete",
+          percent: 18 + Math.floor(((index + 1) / MATERIALS.length) * 72),
+          activeMaterial: material,
+          message: `Finished ${material}. Found ${materialResults.results.length} matching results.`
+        });
       } catch (error) {
         if (error instanceof SessionRequiredError) {
           throw error;
         }
         warnings.push(`Search failed for ${material}: ${error instanceof Error ? error.message : String(error)}`);
+        emitProgress(onProgress, {
+          phase: "material-error",
+          percent: 18 + Math.floor(((index + 1) / MATERIALS.length) * 72),
+          activeMaterial: material,
+          message: `Finished ${material} with warnings.`
+        });
       }
     }
+
+    emitProgress(onProgress, {
+      phase: "finalizing",
+      percent: 96,
+      activeMaterial: null,
+      message: "Finalizing grouped results."
+    });
 
     return {
       searchedAt: new Date().toISOString(),
@@ -334,6 +384,12 @@ async function runSearch() {
     if (context) {
       await context.close().catch(() => {});
     }
+    emitProgress(onProgress, {
+      phase: "complete",
+      percent: 100,
+      activeMaterial: null,
+      message: "Search complete."
+    });
   }
 }
 

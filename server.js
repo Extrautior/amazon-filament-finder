@@ -11,6 +11,15 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 let lastAsyncCrash = null;
 let latestSuccessfulPayload = null;
 let inflightSearch = null;
+let searchProgress = {
+  running: false,
+  phase: "idle",
+  percent: 0,
+  activeMaterial: null,
+  message: "Idle.",
+  startedAt: null,
+  updatedAt: null
+};
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -92,16 +101,40 @@ function requireAuth(req, res) {
   return false;
 }
 
+function setSearchProgress(update) {
+  searchProgress = {
+    ...searchProgress,
+    ...update,
+    updatedAt: new Date().toISOString()
+  };
+}
+
 async function runHostedSearch() {
   if (inflightSearch) {
     logger.info("search.deduped", { reason: "existing-search-in-flight" });
     return inflightSearch;
   }
 
+  setSearchProgress({
+    running: true,
+    phase: "queued",
+    percent: 1,
+    activeMaterial: null,
+    message: "Search queued.",
+    startedAt: new Date().toISOString()
+  });
+
   inflightSearch = (async () => {
     logger.info("search.start");
     try {
-      const payload = await runSearch();
+      const payload = await runSearch({
+        onProgress(update) {
+          setSearchProgress({
+            running: true,
+            ...update
+          });
+        }
+      });
       const counts = Object.fromEntries(
         Object.entries(payload.resultsByMaterial).map(([material, items]) => [material, items.length])
       );
@@ -112,8 +145,23 @@ async function runHostedSearch() {
       logger.error("search.failure", {
         message: error instanceof Error ? error.message : String(error)
       });
+      setSearchProgress({
+        running: false,
+        phase: "error",
+        activeMaterial: searchProgress.activeMaterial,
+        message: error instanceof Error ? error.message : String(error)
+      });
       throw error;
     } finally {
+      if (searchProgress.phase !== "error") {
+        setSearchProgress({
+          running: false,
+          phase: "complete",
+          percent: 100,
+          activeMaterial: null,
+          message: "Search complete."
+        });
+      }
       inflightSearch = null;
     }
   })();
@@ -138,6 +186,18 @@ const server = http.createServer((req, res) => {
         sessionStatus: sessionStatus.status,
         cachedResults: Boolean(latestSuccessfulPayload),
         lastAsyncCrash
+      });
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/api/search-status") {
+      if (!requireAuth(req, res)) {
+        return;
+      }
+
+      sendJson(res, 200, {
+        ...searchProgress,
+        hasCachedResults: Boolean(latestSuccessfulPayload)
       });
       return;
     }
