@@ -27,6 +27,22 @@ let activeSearchJobId = null;
 let resultFetchPending = false;
 let selectedHistoryJobId = null;
 
+const COLOR_GROUPS = [
+  { label: "Black", pattern: /\bblack\b/i },
+  { label: "White", pattern: /\bwhite\b/i },
+  { label: "Gray", pattern: /\bgray\b|\bgrey\b|\bsilver\b/i },
+  { label: "Blue", pattern: /\bblue\b|\bnavy\b|\bsapphire\b/i },
+  { label: "Red", pattern: /\bred\b|\bmaroon\b|\bcrimson\b/i },
+  { label: "Green", pattern: /\bgreen\b|\bolive\b/i },
+  { label: "Yellow", pattern: /\byellow\b|\bgold\b|\bamber\b/i },
+  { label: "Orange", pattern: /\borange\b|\bcopper\b/i },
+  { label: "Purple", pattern: /\bpurple\b|\bviolet\b|\blavender\b/i },
+  { label: "Pink", pattern: /\bpink\b|\brose\b/i },
+  { label: "Brown", pattern: /\bbrown\b|\bbronze\b|\bwood\b/i },
+  { label: "Transparent", pattern: /\bclear\b|\btransparent\b|\btranslucent\b/i },
+  { label: "Multi-Color", pattern: /\brainbow\b|\bmulti(?:-|\s)?color\b|\bmulti(?:-|\s)?colour\b|\bgalaxy\b/i }
+];
+
 function apiUrl(pathname) {
   const url = new URL(pathname, window.location.origin);
   url.searchParams.set("_ts", String(Date.now()));
@@ -154,6 +170,39 @@ function openDownload(url) {
   window.location.assign(url);
 }
 
+function detectColorLabel(title) {
+  const normalizedTitle = String(title || "").trim();
+  for (const colorGroup of COLOR_GROUPS) {
+    if (colorGroup.pattern.test(normalizedTitle)) {
+      return colorGroup.label;
+    }
+  }
+  return "Other Colors";
+}
+
+function groupItemsByColor(items) {
+  const buckets = new Map();
+  for (const item of items) {
+    const colorLabel = detectColorLabel(item.title);
+    if (!buckets.has(colorLabel)) {
+      buckets.set(colorLabel, []);
+    }
+    buckets.get(colorLabel).push(item);
+  }
+
+  return [...buckets.entries()]
+    .sort(([leftLabel], [rightLabel]) => {
+      if (leftLabel === "Other Colors") {
+        return 1;
+      }
+      if (rightLabel === "Other Colors") {
+        return -1;
+      }
+      return leftLabel.localeCompare(rightLabel);
+    })
+    .map(([label, groupedItems]) => ({ label, items: groupedItems }));
+}
+
 function summarizeHistoryItem(item) {
   const labels = Array.isArray(item.labels) && item.labels.length ? item.labels.join(", ") : "Search";
   const searchedAt = item.searchedAt ? new Date(item.searchedAt).toLocaleString() : "Unknown time";
@@ -224,7 +273,17 @@ function cardForResult(item, index) {
 
 function sectionForMaterial(section, items) {
   const cards = items.length
-    ? items.map((item, index) => cardForResult(item, index)).join("")
+    ? groupItemsByColor(items).map((colorGroup) => `
+        <section class="color-group">
+          <div class="color-group-header">
+            <h3>${escapeHtml(colorGroup.label)}</h3>
+            <span>${colorGroup.items.length} result${colorGroup.items.length === 1 ? "" : "s"}</span>
+          </div>
+          <div class="result-grid color-result-grid">
+            ${colorGroup.items.map((item, index) => cardForResult(item, index)).join("")}
+          </div>
+        </section>
+      `).join("")
     : `<p class="empty">No free-shipping ${escapeHtml(section.label)} results found.</p>`;
 
   return `
@@ -233,7 +292,7 @@ function sectionForMaterial(section, items) {
         <h2>${escapeHtml(section.label)} Cheapest Results</h2>
         <span>${items.length} result${items.length === 1 ? "" : "s"}</span>
       </div>
-      <div class="result-grid">
+      <div class="color-groups">
         ${cards}
       </div>
     </article>

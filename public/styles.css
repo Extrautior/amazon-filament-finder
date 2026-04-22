@@ -287,6 +287,36 @@ button:disabled {
   padding: 0 24px 24px;
 }
 
+.color-groups {
+  display: grid;
+  gap: 18px;
+  padding: 0 24px 24px;
+}
+
+.color-group {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.45);
+  overflow: hidden;
+}
+
+.color-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px 10px;
+}
+
+.color-group-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.color-result-grid {
+  padding: 0 18px 18px;
+}
+
 .result-card {
   border: 1px solid var(--line);
   border-radius: 18px;
