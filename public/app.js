@@ -33,6 +33,8 @@ let resultFetchPending = false;
 let selectedHistoryJobId = null;
 let currentResultIndex = 0;
 let floatingMenusEnabled = false;
+let floatingResultsNavScrollTop = 0;
+let floatingColorNavScrollTop = 0;
 
 const COLOR_DEFINITIONS = [
   {
@@ -651,7 +653,13 @@ function renderFloatingResultsNav(cards) {
     floatingResultsNavEl.hidden = true;
     floatingResultsNavEl.innerHTML = "";
     floatingResultsNavEl.classList.remove("is-visible");
+    floatingResultsNavScrollTop = 0;
     return;
+  }
+
+  const previousList = floatingResultsNavEl.querySelector(".results-indicators-floating");
+  if (previousList) {
+    floatingResultsNavScrollTop = previousList.scrollTop;
   }
 
   floatingResultsNavEl.hidden = false;
@@ -684,6 +692,14 @@ function renderFloatingResultsNav(cards) {
     });
   }
 
+  const nextList = floatingResultsNavEl.querySelector(".results-indicators-floating");
+  if (nextList) {
+    nextList.scrollTop = floatingResultsNavScrollTop;
+    nextList.addEventListener("scroll", () => {
+      floatingResultsNavScrollTop = nextList.scrollTop;
+    }, { passive: true });
+  }
+
   updateFloatingMenuVisibility();
 }
 
@@ -692,6 +708,7 @@ function renderFloatingColorNav(activeCard) {
     floatingColorNavEl.hidden = true;
     floatingColorNavEl.innerHTML = "";
     floatingColorNavEl.classList.remove("is-visible");
+    floatingColorNavScrollTop = 0;
     return;
   }
 
@@ -700,7 +717,13 @@ function renderFloatingColorNav(activeCard) {
     floatingColorNavEl.hidden = true;
     floatingColorNavEl.innerHTML = "";
     floatingColorNavEl.classList.remove("is-visible");
+    floatingColorNavScrollTop = 0;
     return;
+  }
+
+  const previousList = floatingColorNavEl.querySelector(".color-jump-actions-floating");
+  if (previousList) {
+    floatingColorNavScrollTop = previousList.scrollTop;
   }
 
   const sectionTitle = activeCard.querySelector(".material-header h2")?.textContent?.trim() || "Colors";
@@ -718,6 +741,14 @@ function renderFloatingColorNav(activeCard) {
       </div>
     </div>
   `;
+
+  const nextList = floatingColorNavEl.querySelector(".color-jump-actions-floating");
+  if (nextList) {
+    nextList.scrollTop = floatingColorNavScrollTop;
+    nextList.addEventListener("scroll", () => {
+      floatingColorNavScrollTop = nextList.scrollTop;
+    }, { passive: true });
+  }
 
   updateFloatingMenuVisibility();
 }
