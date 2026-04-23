@@ -9,7 +9,13 @@ const {
   mergeDiscountsIntoCheapestRange
 } = require("../src/amazonParser");
 const { payloadToCsv } = require("../src/export");
-const { buildSearchPlan, isProfileLockError, pickStandardPriceText } = require("../src/search");
+const {
+  buildSearchPlan,
+  extractProductPageDeliveryText,
+  extractProductPageRegularPrice,
+  isProfileLockError,
+  pickStandardPriceText
+} = require("../src/search");
 const { extractColorProfile } = require("../src/colorProfile");
 
 test("parsePrice extracts currency and value", () => {
@@ -333,6 +339,44 @@ test("pickStandardPriceText falls back to the only price when no standard price 
   ]);
 
   assert.equal(priceText, "$17.99");
+});
+
+test("extractProductPageRegularPrice reads regular price when Amazon shows Prime member pricing first", () => {
+  const pageText = `
+    Prime Member Price
+    $11
+    99
+    This price is exclusively for Amazon Prime members.
+    Regular Price
+    $13
+    99
+    FREE delivery Sunday, May 31 to Israel on eligible orders over $49
+  `;
+
+  assert.equal(extractProductPageRegularPrice(pageText), "$13.99");
+});
+
+test("extractProductPageRegularPrice ignores regular labels without Prime-member pricing", () => {
+  const pageText = `
+    Regular Price
+    $13
+    99
+    FREE delivery to Israel
+  `;
+
+  assert.equal(extractProductPageRegularPrice(pageText), "");
+});
+
+test("extractProductPageDeliveryText captures free delivery over eligible Israel orders", () => {
+  const pageText = `
+    Regular Price
+    $13
+    99
+    FREE delivery Sunday, May 31 to Israel on eligible orders over $49
+    Ships from Amazon
+  `;
+
+  assert.match(extractProductPageDeliveryText(pageText), /FREE delivery Sunday/);
 });
 
 test("extractColorProfile detects specific shades inside a base color", () => {

@@ -41,6 +41,7 @@ class SessionBusyError extends Error {
 const SESSION_LOCK_FILES = ["SingletonLock", "SingletonSocket", "SingletonCookie"];
 const MAX_SEARCH_RESULT_PAGES = 6;
 const MAX_RAW_RESULT_ITEMS = 180;
+const PRODUCT_PAGE_VERIFY_LIMIT = 45;
 
 function getChromium() {
   return require("playwright").chromium;
@@ -163,6 +164,44 @@ function pickStandardPriceText(priceCandidates = []) {
 
   scoredCandidates.sort((left, right) => left.score - right.score || left.index - right.index);
   return scoredCandidates[0].text;
+}
+
+function extractLabeledDollarPrice(text, label) {
+  const normalized = String(text || "")
+    .replace(/,/g, "")
+    .replace(/\u200f|\u200e/g, " ")
+    .replace(/[ \t]+/g, " ");
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = normalized.match(new RegExp(`${escapedLabel}\\s*\\$\\s*(\\d+(?:\\.\\d{1,2})?)(?:\\s+(\\d{2}))?`, "i"));
+  if (!match) {
+    return "";
+  }
+
+  if (match[1].includes(".")) {
+    return `$${match[1]}`;
+  }
+
+  return `$${match[1]}${match[2] ? `.${match[2]}` : ""}`;
+}
+
+function extractProductPageRegularPrice(pageText) {
+  const text = String(pageText || "");
+  if (!/prime\s+member\s+price|exclusive\s+prime\s+price|exclusively\s+for\s+amazon\s+prime\s+members/i.test(text)) {
+    return "";
+  }
+
+  return extractLabeledDollarPrice(text, "Regular Price");
+}
+
+function extractProductPageDeliveryText(pageText) {
+  const text = String(pageText || "").replace(/\s+/g, " ");
+  const freeDeliveryMatch = text.match(/FREE delivery.{0,180}?(?:Israel|eligible orders over \$49)/i);
+  if (freeDeliveryMatch) {
+    return freeDeliveryMatch[0];
+  }
+
+  const paidShippingMatch = text.match(/\$\s?\d+(?:\.\d{1,2})?\s+Shipping to Israel/i);
+  return paidShippingMatch ? paidShippingMatch[0] : "";
 }
 
 function ensureDirectory(dirPath) {
@@ -489,6 +528,54 @@ async function collectSearchPageItems(page) {
   }
 }
 
+async function verifyProductPagePricing(context, item, material) {
+  if (!item.asin) {
+    return item;
+  }
+
+  const page = await context.newPage();
+  try {
+    await page.goto(`https://www.amazon.com/dp/${item.asin}`, {
+      waitUntil: "domcontentloaded",
+      timeout: DEFAULT_TIMEOUT_MS
+    });
+    await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
+    await detectBlockingState(page, material);
+
+    const pageText = await page.locator("body").innerText({ timeout: 5000 }).catch(() => "");
+    const regularPriceText = extractProductPageRegularPrice(pageText);
+    const deliveryText = extractProductPageDeliveryText(pageText);
+
+    if (!regularPriceText && !deliveryText) {
+      return item;
+    }
+
+    return {
+      ...item,
+      priceText: regularPriceText || item.priceText,
+      shippingText: deliveryText || item.shippingText,
+      deliveryText: deliveryText || item.deliveryText,
+      badgeText: deliveryText || item.badgeText,
+      sourcePage: regularPriceText ? "product-verified" : item.sourcePage
+    };
+  } catch {
+    return item;
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+async function verifyTopProductPages(context, rawItems, material) {
+  const verified = [];
+  const remaining = rawItems.slice(PRODUCT_PAGE_VERIFY_LIMIT);
+
+  for (const item of rawItems.slice(0, PRODUCT_PAGE_VERIFY_LIMIT)) {
+    verified.push(await verifyProductPagePricing(context, item, material));
+  }
+
+  return verified.concat(remaining);
+}
+
 async function searchMaterial(context, searchTarget) {
   const page = await context.newPage();
   const warnings = [];
@@ -537,7 +624,9 @@ async function searchMaterial(context, searchTarget) {
       }
     }
 
-    const materialResults = normalizeMaterialResults(material, rawItems.map((item) => ({
+    const verifiedItems = await verifyTopProductPages(context, rawItems, material);
+
+    const materialResults = normalizeMaterialResults(material, verifiedItems.map((item) => ({
       ...item,
       url: item.asin ? `https://www.amazon.com/dp/${item.asin}` : resolveAmazonUrl(item.url)
     })), {
@@ -668,6 +757,8 @@ async function openSessionBrowser() {
 
 module.exports = {
   buildSearchPlan,
+  extractProductPageDeliveryText,
+  extractProductPageRegularPrice,
   pickStandardPriceText,
   SessionBusyError,
   SessionRequiredError,
