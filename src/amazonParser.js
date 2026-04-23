@@ -50,6 +50,14 @@ function cleanText(text) {
   return (text || "").replace(/\s+/g, " ").trim();
 }
 
+function hasExplicitFreeShippingSignal(...texts) {
+  return texts.some((text) => /free shipping|free delivery/i.test(text || ""));
+}
+
+function hasExplicitPaidShippingSignal(...texts) {
+  return texts.some((text) => /\$\s?\d+(?:\.\d{1,2})?\s+shipping|shipping\s+\$\s?\d+(?:\.\d{1,2})?/i.test(text || ""));
+}
+
 function parseDiscountPercent(text) {
   const normalized = cleanText(text);
   const match = normalized.match(/(?:save|extra)\s+(\d+)%|(\d+)%\s+off/i);
@@ -125,27 +133,27 @@ function compareCheapestResults(left, right) {
 function normalizeResult(material, raw, options = {}) {
   const title = cleanText(raw.title || "");
   const colorProfile = extractColorProfile(title);
-  const availabilityNote = cleanText([raw.shippingText, raw.deliveryText, raw.badgeText].filter(Boolean).join(" | "));
+  const shippingText = cleanText(raw.shippingText || "");
+  const deliveryText = cleanText(raw.deliveryText || "");
+  const badgeText = cleanText(raw.badgeText || "");
+  const availabilityNote = cleanText([shippingText, deliveryText, badgeText].filter(Boolean).join(" | "));
   const discountText = cleanText(raw.discountText || "");
-  const shipping = parsePrice(cleanText(raw.shippingText));
+  const shipping = parsePrice(shippingText);
   const importFees = parsePrice(cleanText(raw.importFeesText));
   const productPrice = parsePrice(cleanText(raw.priceText));
   const destinationConfirmed = options.destinationConfirmed !== false;
   const freeShippingMode = options.freeShippingMode === true;
-  const filteredEligible = options.filteredEligible === true;
   const discountPercent = parseDiscountPercent(discountText);
   const hasDiscount = hasDiscountSignal(discountText);
 
-  const freeShipping =
-    filteredEligible ||
-    /free shipping/i.test(raw.shippingText || "") ||
-    /free delivery/i.test(raw.deliveryText || "") ||
-    /free shipping/i.test(raw.badgeText || "");
+  const explicitFreeShipping = hasExplicitFreeShippingSignal(shippingText, deliveryText, badgeText);
+  const explicitPaidShipping = hasExplicitPaidShippingSignal(shippingText, deliveryText, badgeText);
+  const freeShipping = explicitFreeShipping && !explicitPaidShipping;
   const blockedShipping = /cannot be shipped|unavailable|does not ship|not available|currently unavailable/i.test(
     availabilityNote
   );
   const explicitIsraelSignal = /Israel/i.test(availabilityNote);
-  const shipsToIsrael = !blockedShipping && (filteredEligible || freeShippingMode || destinationConfirmed || explicitIsraelSignal);
+  const shipsToIsrael = !blockedShipping && (explicitIsraelSignal || destinationConfirmed || freeShippingMode);
 
   const shippingValue = freeShipping ? 0 : shipping ? shipping.value : null;
   const totalValue = computeTotal(productPrice ? productPrice.value : 0, shippingValue, importFees ? importFees.value : null);
@@ -265,7 +273,7 @@ function normalizeMaterialResults(material, rawResults, options = {}) {
     .filter((item) => materialMatches(material, item.title))
     .map((item) => normalizeResult(material, item, options))
     .filter((item) => item.shipsToIsrael)
-    .filter((item) => ((options.freeShippingMode && !options.filteredEligible) ? item.freeShipping : true));
+    .filter((item) => (options.freeShippingMode ? item.freeShipping : true));
 
   return {
     results: dedupeAndSort(eligibleResults),

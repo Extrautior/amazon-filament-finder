@@ -111,6 +111,41 @@ test("normalizeMaterialResults keeps only free-shipping items in free-shipping m
   assert.equal(results[0].title, "ABS Filament Free Shipping 1kg");
 });
 
+test("normalizeMaterialResults does not trust the Amazon free-shipping filter by itself", () => {
+  const payload = normalizeMaterialResults("PLA", [
+    {
+      title: "PLA Filament Claimed Eligible 1kg",
+      url: "https://www.amazon.com/dp/B000000007",
+      priceText: "$15.00",
+      shippingText: "$6.99 shipping to Israel",
+      deliveryText: "Delivery Friday to Israel",
+      importFeesText: "",
+      sourcePage: "search",
+      capturedAt: "2026-04-21T12:00:00.000Z"
+    }
+  ], { destinationConfirmed: true, freeShippingMode: true, filteredEligible: true });
+
+  assert.equal(payload.results.length, 0);
+});
+
+test("normalizeMaterialResults keeps explicit free-delivery results in free-shipping mode", () => {
+  const payload = normalizeMaterialResults("PLA", [
+    {
+      title: "PLA Filament Explicit Free Delivery 1kg",
+      url: "https://www.amazon.com/dp/B000000008",
+      priceText: "$18.00",
+      shippingText: "FREE delivery to Israel",
+      deliveryText: "FREE delivery to Israel",
+      importFeesText: "",
+      sourcePage: "search",
+      capturedAt: "2026-04-21T12:00:00.000Z"
+    }
+  ], { destinationConfirmed: true, freeShippingMode: true, filteredEligible: true });
+
+  assert.equal(payload.results.length, 1);
+  assert.equal(payload.results[0].freeShipping, true);
+});
+
 test("normalizeMaterialResults splits discounted deals into a separate result group", () => {
   const payload = normalizeMaterialResults("PLA", [
     {
