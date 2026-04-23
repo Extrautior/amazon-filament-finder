@@ -41,7 +41,7 @@ class SessionBusyError extends Error {
 const SESSION_LOCK_FILES = ["SingletonLock", "SingletonSocket", "SingletonCookie"];
 const MAX_SEARCH_RESULT_PAGES = 6;
 const MAX_RAW_RESULT_ITEMS = 180;
-const PRODUCT_PAGE_VERIFY_LIMIT = 45;
+const PRODUCT_PAGE_VERIFY_LIMIT = 8;
 
 function getChromium() {
   return require("playwright").chromium;
