@@ -130,10 +130,39 @@ function pickStandardPriceText(priceCandidates = []) {
   }
 
   const primeOnlyPattern =
-    /prime\s+(exclusive|price)|with\s+prime|prime\s+member|membership|member\s+price|join\s+prime|exclusive\s+with\s+prime/i;
+    /prime\s+(exclusive|price|savings?)|with\s+prime|prime\s+member|membership|member\s+price|join\s+prime|exclusive\s+with\s+prime|prime\s+discount/i;
+  const businessOnlyPattern =
+    /business\s+price|business\s+exclusive|with\s+business\s+prime/i;
+  const clippedCouponPattern =
+    /with\s+coupon|coupon\s+applied|after\s+coupon/i;
+  const listPricePattern =
+    /list\s+price|was\s+\$|typical\s+price|save\s+\d+%/i;
 
-  const standardCandidate = candidates.find((candidate) => !primeOnlyPattern.test(candidate.context));
-  return (standardCandidate || candidates[0]).text;
+  const scoredCandidates = candidates.map((candidate, index) => {
+    let score = 0;
+    if (primeOnlyPattern.test(candidate.context)) {
+      score += 100;
+    }
+    if (businessOnlyPattern.test(candidate.context)) {
+      score += 80;
+    }
+    if (clippedCouponPattern.test(candidate.context)) {
+      score += 35;
+    }
+    if (listPricePattern.test(candidate.context)) {
+      score += 25;
+    }
+    if (/free shipping|free delivery|delivery/i.test(candidate.context)) {
+      score -= 12;
+    }
+    if (/add to cart|buying options/i.test(candidate.context)) {
+      score -= 4;
+    }
+    return { ...candidate, index, score };
+  });
+
+  scoredCandidates.sort((left, right) => left.score - right.score || left.index - right.index);
+  return scoredCandidates[0].text;
 }
 
 function ensureDirectory(dirPath) {
@@ -346,10 +375,50 @@ async function collectSearchPageItems(page) {
       cards.map((card) => {
         const pickStandardPrice = (priceCandidates) => {
           const primeOnlyPattern =
-            /prime\s+(exclusive|price)|with\s+prime|prime\s+member|membership|member\s+price|join\s+prime|exclusive\s+with\s+prime/i;
-          const normalized = (priceCandidates || []).filter((candidate) => candidate && candidate.text);
-          const standardCandidate = normalized.find((candidate) => !primeOnlyPattern.test(candidate.context || ""));
-          return standardCandidate ? standardCandidate.text : (normalized[0] ? normalized[0].text : "");
+            /prime\s+(exclusive|price|savings?)|with\s+prime|prime\s+member|membership|member\s+price|join\s+prime|exclusive\s+with\s+prime|prime\s+discount/i;
+          const businessOnlyPattern =
+            /business\s+price|business\s+exclusive|with\s+business\s+prime/i;
+          const clippedCouponPattern =
+            /with\s+coupon|coupon\s+applied|after\s+coupon/i;
+          const listPricePattern =
+            /list\s+price|was\s+\$|typical\s+price|save\s+\d+%/i;
+          const normalized = (priceCandidates || [])
+            .map((candidate, index) => ({
+              text: String(candidate && candidate.text ? candidate.text : "").trim(),
+              context: String(candidate && candidate.context ? candidate.context : "").trim(),
+              index
+            }))
+            .filter((candidate) => candidate.text);
+
+          if (!normalized.length) {
+            return "";
+          }
+
+          const scoredCandidates = normalized.map((candidate) => {
+            let score = 0;
+            if (primeOnlyPattern.test(candidate.context)) {
+              score += 100;
+            }
+            if (businessOnlyPattern.test(candidate.context)) {
+              score += 80;
+            }
+            if (clippedCouponPattern.test(candidate.context)) {
+              score += 35;
+            }
+            if (listPricePattern.test(candidate.context)) {
+              score += 25;
+            }
+            if (/free shipping|free delivery|delivery/i.test(candidate.context)) {
+              score -= 12;
+            }
+            if (/add to cart|buying options/i.test(candidate.context)) {
+              score -= 4;
+            }
+            return { ...candidate, score };
+          });
+
+          scoredCandidates.sort((left, right) => left.score - right.score || left.index - right.index);
+          return scoredCandidates[0].text;
         };
         const titleEl = card.querySelector("h2 span");
         const linkEl = card.querySelector("h2 a");
@@ -362,8 +431,17 @@ async function collectSearchPageItems(page) {
               return null;
             }
 
-            const container = priceNode.closest("[data-cy], .a-section, .a-row, .s-price-instructions-style, .s-product-image-container") || priceNode;
-            const contextText = container.textContent || "";
+            const priceContainer =
+              priceNode.closest("[data-cy='price-recipe'], [data-cy='secondary-offer-recipe'], .s-price-instructions-style") ||
+              priceNode.closest(".a-section, .a-row") ||
+              priceNode;
+            const contextParts = [
+              priceContainer.textContent || "",
+              priceContainer.previousElementSibling ? priceContainer.previousElementSibling.textContent || "" : "",
+              priceContainer.nextElementSibling ? priceContainer.nextElementSibling.textContent || "" : "",
+              priceNode.parentElement ? priceNode.parentElement.textContent || "" : ""
+            ];
+            const contextText = contextParts.join(" ");
             return {
               text: offscreen.textContent,
               context: contextText

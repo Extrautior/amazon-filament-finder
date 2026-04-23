@@ -289,6 +289,40 @@ test("pickStandardPriceText prefers the regular listing price over Prime-only pr
   assert.equal(priceText, "$23.99");
 });
 
+test("pickStandardPriceText rejects Prime savings prices even when they appear first", () => {
+  const priceText = pickStandardPriceText([
+    {
+      text: "$11.99",
+      context: "Prime savings price $11.99 Join Prime to buy this item at $11.99"
+    },
+    {
+      text: "$15.99",
+      context: "$15.99 FREE delivery to Israel Add to cart"
+    }
+  ]);
+
+  assert.equal(priceText, "$15.99");
+});
+
+test("pickStandardPriceText avoids coupon-adjusted and list prices when a normal price exists", () => {
+  const priceText = pickStandardPriceText([
+    {
+      text: "$19.99",
+      context: "List Price: $19.99 Save 20%"
+    },
+    {
+      text: "$12.99",
+      context: "$12.99 with coupon"
+    },
+    {
+      text: "$15.99",
+      context: "$15.99 FREE delivery to Israel"
+    }
+  ]);
+
+  assert.equal(priceText, "$15.99");
+});
+
 test("pickStandardPriceText falls back to the only price when no standard price is present", () => {
   const priceText = pickStandardPriceText([
     {
