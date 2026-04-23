@@ -231,6 +231,35 @@ function selectCheapestWithColorCoverage(results, limit = RESULT_LIMIT, extraCov
   return [...selected, ...extras].sort(compareCheapestResults);
 }
 
+function mergeDiscountsIntoCheapestRange(cheapestResults, discountedResults) {
+  if (!cheapestResults.length || !discountedResults.length) {
+    return cheapestResults;
+  }
+
+  const maxCheapestPrice = Math.max(...cheapestResults.map((result) => result.totalValue ?? Number.POSITIVE_INFINITY));
+  const merged = new Map();
+
+  for (const result of cheapestResults) {
+    const key = result.asin || `${result.material}:${result.title.toLowerCase()}`;
+    merged.set(key, result);
+  }
+
+  for (const result of discountedResults) {
+    const totalValue = result.totalValue ?? Number.POSITIVE_INFINITY;
+    if (totalValue > maxCheapestPrice) {
+      continue;
+    }
+
+    const key = result.asin || `${result.material}:${result.title.toLowerCase()}`;
+    const existing = merged.get(key);
+    if (!existing || totalValue < (existing.totalValue ?? Number.POSITIVE_INFINITY)) {
+      merged.set(key, result);
+    }
+  }
+
+  return [...merged.values()].sort(compareCheapestResults);
+}
+
 function dedupeAndSortDiscounted(results) {
   const deduped = new Map();
 
@@ -274,10 +303,12 @@ function normalizeMaterialResults(material, rawResults, options = {}) {
     .map((item) => normalizeResult(material, item, options))
     .filter((item) => item.shipsToIsrael)
     .filter((item) => (options.freeShippingMode ? item.freeShipping : true));
+  const discountedResults = dedupeAndSortDiscounted(eligibleResults.filter((item) => item.hasDiscount));
+  const cheapestResults = mergeDiscountsIntoCheapestRange(dedupeAndSort(eligibleResults), discountedResults);
 
   return {
-    results: dedupeAndSort(eligibleResults),
-    discountedResults: dedupeAndSortDiscounted(eligibleResults.filter((item) => item.hasDiscount))
+    results: cheapestResults,
+    discountedResults
   };
 }
 
@@ -289,6 +320,7 @@ module.exports = {
   extractAsin,
   hasDiscountSignal,
   materialMatches,
+  mergeDiscountsIntoCheapestRange,
   normalizeMaterialResults,
   parseDiscountPercent,
   parsePrice,

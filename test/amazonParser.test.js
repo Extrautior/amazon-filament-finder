@@ -5,7 +5,8 @@ const {
   parsePrice,
   normalizeMaterialResults,
   parseDiscountPercent,
-  selectCheapestWithColorCoverage
+  selectCheapestWithColorCoverage,
+  mergeDiscountsIntoCheapestRange
 } = require("../src/amazonParser");
 const { payloadToCsv } = require("../src/export");
 const { buildSearchPlan, isProfileLockError, pickStandardPriceText } = require("../src/search");
@@ -392,4 +393,53 @@ test("selectCheapestWithColorCoverage expands the shortlist when it uncovers new
 
   assert.equal(shortlisted.length, 4);
   assert.deepEqual(shortlisted.map((item) => item.shadeLabel), ["Black", "Gray", "Olive Green", "Dark Green"]);
+});
+
+test("mergeDiscountsIntoCheapestRange keeps cheap discounted items in the cheapest color-grouped list", () => {
+  const cheapest = [
+    {
+      material: "PLA",
+      title: "PLA Black 1kg",
+      asin: "B000000001",
+      priceValue: 12,
+      totalValue: 12,
+      colorKey: "black"
+    },
+    {
+      material: "PLA",
+      title: "PLA White 1kg",
+      asin: "B000000002",
+      priceValue: 16,
+      totalValue: 16,
+      colorKey: "white"
+    }
+  ];
+  const discounted = [
+    {
+      material: "PLA",
+      title: "PLA Green Discount 1kg",
+      asin: "B000000003",
+      priceValue: 14,
+      totalValue: 14,
+      colorKey: "green",
+      hasDiscount: true
+    },
+    {
+      material: "PLA",
+      title: "PLA Expensive Discount 1kg",
+      asin: "B000000004",
+      priceValue: 25,
+      totalValue: 25,
+      colorKey: "red",
+      hasDiscount: true
+    }
+  ];
+
+  const merged = mergeDiscountsIntoCheapestRange(cheapest, discounted);
+
+  assert.deepEqual(merged.map((item) => item.title), [
+    "PLA Black 1kg",
+    "PLA Green Discount 1kg",
+    "PLA White 1kg"
+  ]);
 });
