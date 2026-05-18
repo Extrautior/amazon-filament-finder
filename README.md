@@ -35,6 +35,7 @@ Copy `.env.example` into your preferred service env file and set:
 - `PORT`
 - `RESULT_LIMIT`
 - `SEARCH_TIMEOUT_MS`
+- `PRODUCT_PAGE_VERIFY_LIMIT`
 - `AUTO_REFRESH_ENABLED`
 - `AUTO_REFRESH_TIMEZONE`
 - `AUTO_REFRESH_HOURS`

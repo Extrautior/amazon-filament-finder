@@ -421,8 +421,9 @@ test("extractProductPageDeliveryText captures quantity-threshold free delivery w
 });
 
 test("buildQuantityProbeList targets likely free-shipping thresholds without slow full scans", () => {
-  assert.deepEqual(buildQuantityProbeList("$15.99"), [1, 4, 5]);
+  assert.deepEqual(buildQuantityProbeList("$15.99"), [1, 2, 3, 4, 5]);
   assert.deepEqual(buildQuantityProbeList("$24.99"), [1, 2, 3, 4]);
+  assert.deepEqual(buildQuantityProbeList("$30.99"), [1, 2, 3, 4]);
 });
 
 test("extractAsinFromAmazonHref reads sponsored Amazon redirect URLs", () => {

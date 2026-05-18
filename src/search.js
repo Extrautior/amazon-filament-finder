@@ -7,6 +7,7 @@ const {
   AMAZON_SESSION_DIR,
   SEARCH_BASE_URL,
   SEARCH_TERMS,
+  PRODUCT_PAGE_VERIFY_LIMIT,
   HEADLESS,
   BROWSER_CHANNEL,
   BROWSER_EXECUTABLE_PATH,
@@ -41,7 +42,6 @@ class SessionBusyError extends Error {
 const SESSION_LOCK_FILES = ["SingletonLock", "SingletonSocket", "SingletonCookie"];
 const MAX_SEARCH_RESULT_PAGES = 6;
 const MAX_RAW_RESULT_ITEMS = 180;
-const PRODUCT_PAGE_VERIFY_LIMIT = 8;
 const MAX_FREE_SHIPPING_QUANTITY_CHECK = 6;
 
 function getChromium() {
@@ -247,7 +247,7 @@ function isFreeDeliveryText(text) {
 function buildQuantityProbeList(priceText) {
   const priceMatch = String(priceText || "").replace(/,/g, "").match(/\$\s?(\d+(?:\.\d{1,2})?)/);
   const unitPrice = priceMatch ? Number(priceMatch[1]) : null;
-  const probes = new Set([1]);
+  const probes = new Set([1, 2, 3, 4]);
 
   if (unitPrice && unitPrice > 0) {
     for (const threshold of [49, 50]) {
