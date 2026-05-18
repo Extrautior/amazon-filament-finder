@@ -118,7 +118,7 @@ test("normalizeMaterialResults keeps only free-shipping items in free-shipping m
   assert.equal(results[0].title, "ABS Filament Free Shipping 1kg");
 });
 
-test("normalizeMaterialResults does not trust the Amazon free-shipping filter by itself", () => {
+test("normalizeMaterialResults does not trust unverified Amazon free-shipping filter results by itself", () => {
   const payload = normalizeMaterialResults("PLA", [
     {
       title: "PLA Filament Claimed Eligible 1kg",
@@ -133,6 +133,33 @@ test("normalizeMaterialResults does not trust the Amazon free-shipping filter by
   ], { destinationConfirmed: true, freeShippingMode: true, filteredEligible: true });
 
   assert.equal(payload.results.length, 0);
+});
+
+test("normalizeMaterialResults keeps verified threshold free-shipping items in free-shipping mode", () => {
+  const payload = normalizeMaterialResults("PLA", [
+    {
+      title: "PLA Filament Threshold Free Shipping 1kg",
+      url: "https://www.amazon.com/dp/B000000009",
+      priceText: "$15.99",
+      shippingText: "FREE delivery Monday, June 29",
+      deliveryText: "FREE delivery Monday, June 29",
+      quantityOneShippingText: "$22.28 Shipping to Israel",
+      thresholdFreeShipping: true,
+      minimumFreeShippingQuantity: 4,
+      freeShippingSubtotal: 63.96,
+      importFeesText: "",
+      sourcePage: "product-verified",
+      capturedAt: "2026-04-21T12:00:00.000Z"
+    }
+  ], { destinationConfirmed: true, freeShippingMode: true, filteredEligible: true });
+
+  assert.equal(payload.results.length, 1);
+  assert.equal(payload.results[0].freeShipping, true);
+  assert.equal(payload.results[0].freeShippingKind, "threshold");
+  assert.equal(payload.results[0].minimumFreeShippingQuantity, 4);
+  assert.equal(payload.results[0].freeShippingSubtotal, 63.96);
+  assert.equal(payload.results[0].shippingAtQuantityOne, 22.28);
+  assert.equal(payload.results[0].totalValue, 63.96);
 });
 
 test("normalizeMaterialResults keeps explicit free-delivery results in free-shipping mode", () => {
@@ -377,6 +404,17 @@ test("extractProductPageDeliveryText captures free delivery over eligible Israel
   `;
 
   assert.match(extractProductPageDeliveryText(pageText), /FREE delivery Sunday/);
+});
+
+test("extractProductPageDeliveryText captures quantity-threshold free delivery without repeated Israel text", () => {
+  const pageText = `
+    No Import Charges & $22.28 Shipping to Israel Details
+    FREE delivery Monday, June 29
+    Or fastest delivery Tuesday, June 2
+    Deliver to daniel - Rishon Leziyon 75
+  `;
+
+  assert.match(extractProductPageDeliveryText(pageText), /FREE delivery Monday/);
 });
 
 test("extractColorProfile detects specific shades inside a base color", () => {

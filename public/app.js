@@ -251,6 +251,31 @@ function shortNote(note) {
   return cleaned.length > 140 ? `${cleaned.slice(0, 137)}...` : cleaned;
 }
 
+function freeShippingLabel(item) {
+  if (item.freeShippingKind === "threshold" && item.minimumFreeShippingQuantity) {
+    return `Free at qty ${item.minimumFreeShippingQuantity}`;
+  }
+  return "Free shipping";
+}
+
+function thresholdNote(item) {
+  if (item.freeShippingKind !== "threshold") {
+    return "";
+  }
+
+  const parts = [];
+  if (item.minimumFreeShippingQuantity) {
+    parts.push(`Minimum quantity ${item.minimumFreeShippingQuantity}`);
+  }
+  if (item.freeShippingSubtotal != null) {
+    parts.push(`subtotal ${money(item.freeShippingSubtotal, item.currency)}`);
+  }
+  if (item.shippingAtQuantityOne != null) {
+    parts.push(`qty 1 shipping ${money(item.shippingAtQuantityOne, item.currency)}`);
+  }
+  return parts.join(" · ");
+}
+
 function safeImageUrl(value) {
   try {
     const url = new URL(String(value || "").trim());
@@ -469,12 +494,13 @@ function cardForResult(item, index) {
     <article class="result-card" data-shade-label="${escapeHtml(colorProfile.shadeLabel)}">
       <div class="result-top">
         <span class="result-rank">#${index + 1}</span>
-        <span class="pill pill-free">Free shipping</span>
+        <span class="pill pill-free">${escapeHtml(freeShippingLabel(item))}</span>
         ${colorProfile.shadeLabel !== colorProfile.colorLabel ? `<span class="pill pill-shade">${escapeHtml(colorProfile.shadeLabel)}</span>` : ""}
         ${item.hasDiscount ? `<span class="pill pill-deal">${escapeHtml(item.discountPercent != null ? `Save ${item.discountPercent}%` : "Discount")}</span>` : ""}
       </div>
       ${imageUrl ? `<div class="result-image-wrap"><img class="result-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" /></div>` : ""}
       <h3><a href="${escapeHtml(amazonUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a></h3>
+      ${thresholdNote(item) ? `<p class="result-note">${escapeHtml(thresholdNote(item))}</p>` : ""}
       <dl class="result-metrics">
         <div>
           <dt>Item</dt>

@@ -41,7 +41,8 @@ class SessionBusyError extends Error {
 const SESSION_LOCK_FILES = ["SingletonLock", "SingletonSocket", "SingletonCookie"];
 const MAX_SEARCH_RESULT_PAGES = 6;
 const MAX_RAW_RESULT_ITEMS = 180;
-const PRODUCT_PAGE_VERIFY_LIMIT = 8;
+const PRODUCT_PAGE_VERIFY_LIMIT = 16;
+const MAX_FREE_SHIPPING_QUANTITY_CHECK = 8;
 
 function getChromium() {
   return require("playwright").chromium;
@@ -195,13 +196,111 @@ function extractProductPageRegularPrice(pageText) {
 
 function extractProductPageDeliveryText(pageText) {
   const text = String(pageText || "").replace(/\s+/g, " ");
-  const freeDeliveryMatch = text.match(/FREE delivery.{0,180}?(?:Israel|eligible orders over \$49)/i);
+  const freeDeliveryMatch = text.match(/FREE delivery.{0,180}?(?:Israel|eligible orders over \$\d+|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i);
   if (freeDeliveryMatch) {
     return freeDeliveryMatch[0];
   }
 
   const paidShippingMatch = text.match(/\$\s?\d+(?:\.\d{1,2})?\s+Shipping to Israel/i);
   return paidShippingMatch ? paidShippingMatch[0] : "";
+}
+
+function isFreeDeliveryText(text) {
+  return /FREE delivery|FREE shipping/i.test(String(text || ""));
+}
+
+function buildQuantityProbeList(priceText) {
+  const priceMatch = String(priceText || "").replace(/,/g, "").match(/\$\s?(\d+(?:\.\d{1,2})?)/);
+  const unitPrice = priceMatch ? Number(priceMatch[1]) : null;
+  const probes = new Set([1, 2, 3, 4]);
+
+  if (unitPrice && unitPrice > 0) {
+    for (const threshold of [49, 50, 59, 65]) {
+      probes.add(Math.ceil(threshold / unitPrice));
+    }
+  }
+
+  for (let quantity = 5; quantity <= MAX_FREE_SHIPPING_QUANTITY_CHECK; quantity += 1) {
+    probes.add(quantity);
+  }
+
+  return [...probes]
+    .filter((quantity) => Number.isInteger(quantity) && quantity >= 1 && quantity <= MAX_FREE_SHIPPING_QUANTITY_CHECK)
+    .sort((left, right) => left - right);
+}
+
+async function setProductQuantity(page, quantity) {
+  if (quantity <= 1) {
+    return true;
+  }
+
+  const select = page.locator("select#quantity, #quantity").first();
+  const currentText = await select.textContent({ timeout: 1500 }).catch(() => "");
+  if (!currentText || !new RegExp(`\\b${quantity}\\b`).test(currentText)) {
+    return false;
+  }
+
+  const beforeText = await page.locator("body").innerText({ timeout: 3000 }).catch(() => "");
+  const selectByLabel = await select.selectOption({ label: String(quantity) }).catch(() => null);
+  if (!selectByLabel) {
+    const selectByZeroBasedValue = await select.selectOption(String(quantity - 1)).catch(() => null);
+    if (!selectByZeroBasedValue) {
+      const selectByValue = await select.selectOption(String(quantity)).catch(() => null);
+      if (!selectByValue) {
+        return false;
+      }
+    }
+  }
+
+  await page.waitForFunction(
+    ({ previous, targetQuantity }) => {
+      const bodyText = document.body ? document.body.innerText : "";
+      const selectEl = document.querySelector("select#quantity");
+      const selectedText = selectEl && selectEl.selectedOptions && selectEl.selectedOptions[0]
+        ? selectEl.selectedOptions[0].textContent || ""
+        : "";
+      return bodyText !== previous || new RegExp(`\\b${targetQuantity}\\b`).test(selectedText);
+    },
+    { previous: beforeText, targetQuantity: quantity },
+    { timeout: 5000 }
+  ).catch(() => {});
+  await page.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => {});
+  return true;
+}
+
+async function probeFreeShippingThreshold(page, item) {
+  const probes = buildQuantityProbeList(item.priceText);
+  let quantityOneDeliveryText = "";
+
+  for (const quantity of probes) {
+    const quantityWasSet = await setProductQuantity(page, quantity);
+    if (!quantityWasSet) {
+      continue;
+    }
+
+    const pageText = await page.locator("body").innerText({ timeout: 5000 }).catch(() => "");
+    const deliveryText = extractProductPageDeliveryText(pageText);
+    if (quantity === 1) {
+      quantityOneDeliveryText = deliveryText;
+    }
+    if (quantity > 1 && isFreeDeliveryText(deliveryText)) {
+      const unitPriceMatch = String(item.priceText || "").replace(/,/g, "").match(/\$\s?(\d+(?:\.\d{1,2})?)/);
+      const unitPrice = unitPriceMatch ? Number(unitPriceMatch[1]) : null;
+      return {
+        deliveryText,
+        quantityOneDeliveryText,
+        minimumFreeShippingQuantity: quantity,
+        freeShippingSubtotal: unitPrice ? Number((unitPrice * quantity).toFixed(2)) : null
+      };
+    }
+  }
+
+  return {
+    deliveryText: "",
+    quantityOneDeliveryText,
+    minimumFreeShippingQuantity: null,
+    freeShippingSubtotal: null
+  };
 }
 
 function ensureDirectory(dirPath) {
@@ -545,18 +644,25 @@ async function verifyProductPagePricing(context, item, material) {
     const pageText = await page.locator("body").innerText({ timeout: 5000 }).catch(() => "");
     const regularPriceText = extractProductPageRegularPrice(pageText);
     const deliveryText = extractProductPageDeliveryText(pageText);
+    const thresholdProbe = isFreeDeliveryText(deliveryText)
+      ? null
+      : await probeFreeShippingThreshold(page, { ...item, priceText: regularPriceText || item.priceText });
 
-    if (!regularPriceText && !deliveryText) {
+    if (!regularPriceText && !deliveryText && !thresholdProbe?.deliveryText) {
       return item;
     }
 
     return {
       ...item,
       priceText: regularPriceText || item.priceText,
-      shippingText: deliveryText || item.shippingText,
-      deliveryText: deliveryText || item.deliveryText,
-      badgeText: deliveryText || item.badgeText,
-      sourcePage: regularPriceText ? "product-verified" : item.sourcePage
+      quantityOneShippingText: thresholdProbe?.quantityOneDeliveryText || "",
+      thresholdFreeShipping: Boolean(thresholdProbe?.deliveryText),
+      minimumFreeShippingQuantity: thresholdProbe?.minimumFreeShippingQuantity || null,
+      freeShippingSubtotal: thresholdProbe?.freeShippingSubtotal || null,
+      shippingText: thresholdProbe?.deliveryText || deliveryText || item.shippingText,
+      deliveryText: thresholdProbe?.deliveryText || deliveryText || item.deliveryText,
+      badgeText: thresholdProbe?.deliveryText || deliveryText || item.badgeText,
+      sourcePage: regularPriceText || thresholdProbe?.deliveryText ? "product-verified" : item.sourcePage
     };
   } catch {
     return item;

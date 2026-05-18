@@ -8,6 +8,7 @@ This version keeps the same scraping logic as the original local tool:
 - `1kg` and `2.2lbs` listings only
 - Amazon low-to-high sorting
 - Amazon's own `Eligible for Free Shipping` search filter
+- product-page quantity checks for listings that become free-shipping eligible only after the order subtotal crosses Amazon's threshold
 - strict material matching
 - images, export, and direct product links
 

@@ -148,7 +148,16 @@ function normalizeResult(material, raw, options = {}) {
 
   const explicitFreeShipping = hasExplicitFreeShippingSignal(shippingText, deliveryText, badgeText);
   const explicitPaidShipping = hasExplicitPaidShippingSignal(shippingText, deliveryText, badgeText);
-  const freeShipping = explicitFreeShipping && !explicitPaidShipping;
+  const thresholdFreeShipping = raw.thresholdFreeShipping === true;
+  const minimumFreeShippingQuantity = Number.isFinite(Number(raw.minimumFreeShippingQuantity))
+    ? Number(raw.minimumFreeShippingQuantity)
+    : null;
+  const freeShippingSubtotal = Number.isFinite(Number(raw.freeShippingSubtotal))
+    ? Number(raw.freeShippingSubtotal)
+    : null;
+  const quantityOneShipping = parsePrice(cleanText(raw.quantityOneShippingText || ""));
+  const freeShipping = (explicitFreeShipping && !explicitPaidShipping) || thresholdFreeShipping;
+  const freeShippingKind = thresholdFreeShipping ? "threshold" : freeShipping ? "single-item" : "none";
   const blockedShipping = /cannot be shipped|unavailable|does not ship|not available|currently unavailable/i.test(
     availabilityNote
   );
@@ -156,7 +165,12 @@ function normalizeResult(material, raw, options = {}) {
   const shipsToIsrael = !blockedShipping && (explicitIsraelSignal || destinationConfirmed || freeShippingMode);
 
   const shippingValue = freeShipping ? 0 : shipping ? shipping.value : null;
-  const totalValue = computeTotal(productPrice ? productPrice.value : 0, shippingValue, importFees ? importFees.value : null);
+  const basePriceValue = thresholdFreeShipping && freeShippingSubtotal != null
+    ? freeShippingSubtotal
+    : productPrice
+      ? productPrice.value
+      : 0;
+  const totalValue = computeTotal(basePriceValue, shippingValue, importFees ? importFees.value : null);
 
   return {
     material,
@@ -175,6 +189,10 @@ function normalizeResult(material, raw, options = {}) {
     currency: productPrice ? productPrice.currency : shipping ? shipping.currency : importFees ? importFees.currency : "$",
     shipsToIsrael,
     freeShipping,
+    freeShippingKind,
+    minimumFreeShippingQuantity,
+    freeShippingSubtotal,
+    shippingAtQuantityOne: quantityOneShipping ? quantityOneShipping.value : null,
     hasDiscount,
     discountText,
     discountPercent,
