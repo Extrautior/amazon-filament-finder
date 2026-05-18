@@ -100,17 +100,52 @@ function buildSearchUrl(query) {
   return url.toString();
 }
 
+function extractAsinFromAmazonHref(href) {
+  if (!href) {
+    return "";
+  }
+
+  const candidates = [String(href)];
+  try {
+    const url = new URL(href, "https://www.amazon.com");
+    for (const value of url.searchParams.values()) {
+      candidates.push(value);
+      try {
+        candidates.push(decodeURIComponent(value));
+      } catch {
+        // Ignore malformed Amazon tracking parameters.
+      }
+    }
+  } catch {
+    try {
+      candidates.push(decodeURIComponent(String(href)));
+    } catch {
+      // Ignore malformed Amazon tracking URLs.
+    }
+  }
+
+  for (const candidate of candidates) {
+    const match = String(candidate).match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i);
+    if (match) {
+      return match[1].toUpperCase();
+    }
+  }
+
+  return "";
+}
+
 function resolveAmazonUrl(href) {
   if (!href) {
     return null;
   }
 
   try {
-    const url = new URL(href, "https://www.amazon.com");
-    const asinMatch = url.pathname.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i);
-    if (asinMatch) {
-      return `https://www.amazon.com/dp/${asinMatch[1].toUpperCase()}`;
+    const asin = extractAsinFromAmazonHref(href);
+    if (asin) {
+      return `https://www.amazon.com/dp/${asin}`;
     }
+
+    const url = new URL(href, "https://www.amazon.com");
     return url.toString();
   } catch {
     return href;
@@ -507,6 +542,39 @@ async function collectSearchPageItems(page) {
     await page.waitForSelector("[data-component-type='s-search-result']", { timeout: DEFAULT_TIMEOUT_MS });
     return (await page.$$eval("[data-component-type='s-search-result']", (cards) =>
       cards.map((card) => {
+        const extractAsinFromHref = (href) => {
+          if (!href) {
+            return "";
+          }
+
+          const candidates = [String(href)];
+          try {
+            const url = new URL(href, "https://www.amazon.com");
+            for (const value of url.searchParams.values()) {
+              candidates.push(value);
+              try {
+                candidates.push(decodeURIComponent(value));
+              } catch {
+                // Ignore malformed Amazon tracking parameters.
+              }
+            }
+          } catch {
+            try {
+              candidates.push(decodeURIComponent(String(href)));
+            } catch {
+              // Ignore malformed Amazon tracking URLs.
+            }
+          }
+
+          for (const candidate of candidates) {
+            const match = String(candidate).match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i);
+            if (match) {
+              return match[1].toUpperCase();
+            }
+          }
+
+          return "";
+        };
         const pickStandardPrice = (priceCandidates) => {
           const primeOnlyPattern =
             /prime\s+(exclusive|price|savings?)|with\s+prime|prime\s+member|membership|member\s+price|join\s+prime|exclusive\s+with\s+prime|prime\s+discount/i;
@@ -556,7 +624,8 @@ async function collectSearchPageItems(page) {
         };
         const titleEl = card.querySelector("h2 span");
         const linkEl = card.querySelector("h2 a");
-        const asin = card.getAttribute("data-asin") || "";
+        const href = linkEl ? linkEl.href || linkEl.getAttribute("href") : null;
+        const asin = card.getAttribute("data-asin") || extractAsinFromHref(href);
         const imageEl = card.querySelector("img.s-image");
         const priceCandidates = [...card.querySelectorAll(".a-price")]
           .map((priceNode) => {
@@ -596,7 +665,6 @@ async function collectSearchPageItems(page) {
           /save\s+\d+%|extra\s+\d+%|\d+%\s+off|coupon|discount|at checkout/i.test(node.textContent || "")
         );
 
-        const href = linkEl ? linkEl.href || linkEl.getAttribute("href") : null;
         const priceText = pickStandardPrice(priceCandidates);
 
         return {
@@ -868,5 +936,7 @@ module.exports = {
   isProfileLockError,
   openSessionBrowser,
   buildQuantityProbeList,
+  extractAsinFromAmazonHref,
+  resolveAmazonUrl,
   runSearch
 };

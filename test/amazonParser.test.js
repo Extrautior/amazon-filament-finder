@@ -14,8 +14,10 @@ const {
   extractProductPageDeliveryText,
   extractProductPageRegularPrice,
   buildQuantityProbeList,
+  extractAsinFromAmazonHref,
   isProfileLockError,
-  pickStandardPriceText
+  pickStandardPriceText,
+  resolveAmazonUrl
 } = require("../src/search");
 const { extractColorProfile } = require("../src/colorProfile");
 
@@ -421,6 +423,13 @@ test("extractProductPageDeliveryText captures quantity-threshold free delivery w
 test("buildQuantityProbeList targets likely free-shipping thresholds without slow full scans", () => {
   assert.deepEqual(buildQuantityProbeList("$15.99"), [1, 4, 5]);
   assert.deepEqual(buildQuantityProbeList("$24.99"), [1, 2, 3, 4]);
+});
+
+test("extractAsinFromAmazonHref reads sponsored Amazon redirect URLs", () => {
+  const sponsoredUrl = "https://www.amazon.com/sspa/click?url=%2FFANCYPOP-Filament-Printing-Dimensional-Accuracy%2Fdp%2FB0G6DVCHXC%2Fref%3Dsr_1_1_sspa";
+
+  assert.equal(extractAsinFromAmazonHref(sponsoredUrl), "B0G6DVCHXC");
+  assert.equal(resolveAmazonUrl(sponsoredUrl), "https://www.amazon.com/dp/B0G6DVCHXC");
 });
 
 test("extractColorProfile detects specific shades inside a base color", () => {
