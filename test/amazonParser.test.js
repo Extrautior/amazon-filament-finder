@@ -121,7 +121,7 @@ test("normalizeMaterialResults keeps only free-shipping items in free-shipping m
   assert.equal(results[0].title, "ABS Filament Free Shipping 1kg");
 });
 
-test("normalizeMaterialResults does not trust unverified Amazon free-shipping filter results by itself", () => {
+test("normalizeMaterialResults trusts Amazon free-shipping filtered results in free-shipping mode", () => {
   const payload = normalizeMaterialResults("PLA", [
     {
       title: "PLA Filament Claimed Eligible 1kg",
@@ -135,7 +135,9 @@ test("normalizeMaterialResults does not trust unverified Amazon free-shipping fi
     }
   ], { destinationConfirmed: true, freeShippingMode: true, filteredEligible: true });
 
-  assert.equal(payload.results.length, 0);
+  assert.equal(payload.results.length, 1);
+  assert.equal(payload.results[0].freeShipping, true);
+  assert.equal(payload.results[0].freeShippingKind, "amazon-filter");
 });
 
 test("normalizeMaterialResults keeps verified threshold free-shipping items in free-shipping mode", () => {

@@ -255,6 +255,9 @@ function freeShippingLabel(item) {
   if (item.freeShippingKind === "threshold" && item.minimumFreeShippingQuantity) {
     return `Free at qty ${item.minimumFreeShippingQuantity}`;
   }
+  if (item.freeShippingKind === "amazon-filter") {
+    return "Eligible";
+  }
   return "Free shipping";
 }
 

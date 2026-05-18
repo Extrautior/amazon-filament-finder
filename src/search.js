@@ -7,7 +7,6 @@ const {
   AMAZON_SESSION_DIR,
   SEARCH_BASE_URL,
   SEARCH_TERMS,
-  PRODUCT_PAGE_VERIFY_LIMIT,
   HEADLESS,
   BROWSER_CHANNEL,
   BROWSER_EXECUTABLE_PATH,
@@ -735,17 +734,6 @@ async function verifyProductPagePricing(context, item, material) {
   }
 }
 
-async function verifyTopProductPages(context, rawItems, material) {
-  const verified = [];
-  const remaining = rawItems.slice(PRODUCT_PAGE_VERIFY_LIMIT);
-
-  for (const item of rawItems.slice(0, PRODUCT_PAGE_VERIFY_LIMIT)) {
-    verified.push(await verifyProductPagePricing(context, item, material));
-  }
-
-  return verified.concat(remaining);
-}
-
 async function searchMaterial(context, searchTarget) {
   const page = await context.newPage();
   const warnings = [];
@@ -794,9 +782,7 @@ async function searchMaterial(context, searchTarget) {
       }
     }
 
-    const verifiedItems = await verifyTopProductPages(context, rawItems, material);
-
-    const materialResults = normalizeMaterialResults(material, verifiedItems.map((item) => ({
+    const materialResults = normalizeMaterialResults(material, rawItems.map((item) => ({
       ...item,
       url: item.asin ? `https://www.amazon.com/dp/${item.asin}` : resolveAmazonUrl(item.url)
     })), {

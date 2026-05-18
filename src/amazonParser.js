@@ -149,6 +149,7 @@ function normalizeResult(material, raw, options = {}) {
   const explicitFreeShipping = hasExplicitFreeShippingSignal(shippingText, deliveryText, badgeText);
   const explicitPaidShipping = hasExplicitPaidShippingSignal(shippingText, deliveryText, badgeText);
   const thresholdFreeShipping = raw.thresholdFreeShipping === true;
+  const amazonFilteredEligible = freeShippingMode && options.filteredEligible === true;
   const minimumFreeShippingQuantity = Number.isFinite(Number(raw.minimumFreeShippingQuantity))
     ? Number(raw.minimumFreeShippingQuantity)
     : null;
@@ -156,8 +157,14 @@ function normalizeResult(material, raw, options = {}) {
     ? Number(raw.freeShippingSubtotal)
     : null;
   const quantityOneShipping = parsePrice(cleanText(raw.quantityOneShippingText || ""));
-  const freeShipping = (explicitFreeShipping && !explicitPaidShipping) || thresholdFreeShipping;
-  const freeShippingKind = thresholdFreeShipping ? "threshold" : freeShipping ? "single-item" : "none";
+  const freeShipping = (explicitFreeShipping && !explicitPaidShipping) || thresholdFreeShipping || amazonFilteredEligible;
+  const freeShippingKind = thresholdFreeShipping
+    ? "threshold"
+    : explicitFreeShipping && !explicitPaidShipping
+      ? "single-item"
+      : amazonFilteredEligible
+        ? "amazon-filter"
+        : "none";
   const blockedShipping = /cannot be shipped|unavailable|does not ship|not available|currently unavailable/i.test(
     availabilityNote
   );
