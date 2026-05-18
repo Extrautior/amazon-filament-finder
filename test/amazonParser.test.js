@@ -13,6 +13,7 @@ const {
   buildSearchPlan,
   extractProductPageDeliveryText,
   extractProductPageRegularPrice,
+  buildQuantityProbeList,
   isProfileLockError,
   pickStandardPriceText
 } = require("../src/search");
@@ -415,6 +416,11 @@ test("extractProductPageDeliveryText captures quantity-threshold free delivery w
   `;
 
   assert.match(extractProductPageDeliveryText(pageText), /FREE delivery Monday/);
+});
+
+test("buildQuantityProbeList targets likely free-shipping thresholds without slow full scans", () => {
+  assert.deepEqual(buildQuantityProbeList("$15.99"), [1, 4, 5]);
+  assert.deepEqual(buildQuantityProbeList("$24.99"), [1, 2, 3, 4]);
 });
 
 test("extractColorProfile detects specific shades inside a base color", () => {

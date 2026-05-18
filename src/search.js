@@ -41,8 +41,8 @@ class SessionBusyError extends Error {
 const SESSION_LOCK_FILES = ["SingletonLock", "SingletonSocket", "SingletonCookie"];
 const MAX_SEARCH_RESULT_PAGES = 6;
 const MAX_RAW_RESULT_ITEMS = 180;
-const PRODUCT_PAGE_VERIFY_LIMIT = 16;
-const MAX_FREE_SHIPPING_QUANTITY_CHECK = 8;
+const PRODUCT_PAGE_VERIFY_LIMIT = 8;
+const MAX_FREE_SHIPPING_QUANTITY_CHECK = 6;
 
 function getChromium() {
   return require("playwright").chromium;
@@ -212,16 +212,16 @@ function isFreeDeliveryText(text) {
 function buildQuantityProbeList(priceText) {
   const priceMatch = String(priceText || "").replace(/,/g, "").match(/\$\s?(\d+(?:\.\d{1,2})?)/);
   const unitPrice = priceMatch ? Number(priceMatch[1]) : null;
-  const probes = new Set([1, 2, 3, 4]);
+  const probes = new Set([1]);
 
   if (unitPrice && unitPrice > 0) {
-    for (const threshold of [49, 50, 59, 65]) {
-      probes.add(Math.ceil(threshold / unitPrice));
+    for (const threshold of [49, 50]) {
+      const thresholdQuantity = Math.ceil(threshold / unitPrice);
+      probes.add(thresholdQuantity);
+      probes.add(thresholdQuantity + 1);
     }
-  }
-
-  for (let quantity = 5; quantity <= MAX_FREE_SHIPPING_QUANTITY_CHECK; quantity += 1) {
-    probes.add(quantity);
+  } else {
+    probes.add(4);
   }
 
   return [...probes]
@@ -253,18 +253,14 @@ async function setProductQuantity(page, quantity) {
   }
 
   await page.waitForFunction(
-    ({ previous, targetQuantity }) => {
+    ({ previous }) => {
       const bodyText = document.body ? document.body.innerText : "";
-      const selectEl = document.querySelector("select#quantity");
-      const selectedText = selectEl && selectEl.selectedOptions && selectEl.selectedOptions[0]
-        ? selectEl.selectedOptions[0].textContent || ""
-        : "";
-      return bodyText !== previous || new RegExp(`\\b${targetQuantity}\\b`).test(selectedText);
+      return bodyText !== previous;
     },
-    { previous: beforeText, targetQuantity: quantity },
-    { timeout: 5000 }
+    { previous: beforeText },
+    { timeout: 2500 }
   ).catch(() => {});
-  await page.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => {});
+  await page.waitForTimeout(700).catch(() => {});
   return true;
 }
 
@@ -871,5 +867,6 @@ module.exports = {
   getSessionStatus,
   isProfileLockError,
   openSessionBrowser,
+  buildQuantityProbeList,
   runSearch
 };
