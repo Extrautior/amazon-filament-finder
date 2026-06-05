@@ -764,12 +764,13 @@ async function verifyProductPagePricing(context, item, material) {
 }
 
 async function collectBrowserSearchQuery(context, searchTarget, query, warnings) {
-  const page = await context.newPage();
+  let page;
   const material = searchTarget.label;
   let rawItems = [];
   const seenAsins = new Set();
 
   try {
+    page = await context.newPage();
     await page.goto(buildSearchUrl(query), { waitUntil: "domcontentloaded", timeout: DEFAULT_TIMEOUT_MS });
     await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
     await detectBlockingState(page, material);
@@ -854,8 +855,13 @@ async function collectBrowserSearchQuery(context, searchTarget, query, warnings)
     }
 
     return rawItems;
+  } catch (error) {
+    warnings.push(`Skipped "${query}": ${error instanceof Error ? error.message : String(error)}`);
+    return [];
   } finally {
-    await page.close().catch(() => {});
+    if (page) {
+      await page.close().catch(() => {});
+    }
   }
 }
 
@@ -947,6 +953,8 @@ async function runBrowserSearch(options = {}) {
     if (sessionStatus.status !== "ready") {
       throw new SessionRequiredError(sessionStatus.message);
     }
+    await context.close().catch(() => {});
+    context = null;
 
     const warnings = [];
     const resultsByMaterial = Object.fromEntries(searchPlan.map((target) => [target.key, []]));
@@ -964,8 +972,10 @@ async function runBrowserSearch(options = {}) {
         message: `Searching ${searchTarget.label} listings on Amazon.`
       });
 
+      let materialContext;
       try {
-        const materialResults = await searchMaterial(context, searchTarget, {
+        materialContext = await launchSessionContext();
+        const materialResults = await searchMaterial(materialContext, searchTarget, {
           maxQueries: maxQueriesPerMaterial
         });
         resultsByMaterial[searchTarget.key] = materialResults.results;
@@ -988,6 +998,10 @@ async function runBrowserSearch(options = {}) {
           activeMaterial: searchTarget.label,
           message: `Finished ${searchTarget.label} with warnings.`
         });
+      } finally {
+        if (materialContext) {
+          await materialContext.close().catch(() => {});
+        }
       }
     }
 
