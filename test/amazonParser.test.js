@@ -395,6 +395,7 @@ test("buildSearchPlan includes bundle query seeds for material searches", () => 
   assert.ok(plan.queries.includes("PLA multipack filament"));
   assert.ok(plan.queries.includes("Comgrow PLA filament"));
   assert.ok(plan.queries.includes("PLA filament bundle 1kg"));
+  assert.ok(plan.queries.indexOf("Comgrow PLA filament") < 8);
 });
 
 test("buildSearchUrl uses Amazon free-shipping filter and price sort", () => {

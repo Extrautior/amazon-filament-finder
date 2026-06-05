@@ -46,6 +46,9 @@ BROWSER_VERIFY_LIMIT_SCHEDULED=5
 BROWSER_VERIFY_LIMIT_MANUAL=25
 BROWSER_MAX_SEARCH_RESULT_PAGES=20
 BROWSER_MAX_RAW_RESULT_ITEMS=1000
+BROWSER_MAX_QUERIES_PER_MATERIAL=8
+BROWSER_SINGLE_MATERIAL_MAX_QUERIES=0
+BROWSER_RESULT_SELECTOR_TIMEOUT_MS=12000
 ENABLE_LEGACY_BROWSER_SEARCH=false
 AUTO_REFRESH_ENABLED=true
 AUTO_REFRESH_TIMEZONE=Asia/Jerusalem
@@ -64,6 +67,8 @@ Notes:
 - `SEARCH_PROVIDER=browser` means no paid API is used.
 - `BROWSER_MAX_SEARCH_RESULT_PAGES=20` means one query can crawl up to 20 Amazon result pages.
 - `BROWSER_MAX_RAW_RESULT_ITEMS=1000` prevents one bad search from growing forever.
+- `BROWSER_MAX_QUERIES_PER_MATERIAL=8` keeps Search All balanced instead of crawling every brand seed for every material.
+- `BROWSER_RESULT_SELECTOR_TIMEOUT_MS=12000` skips bad/blocked pages faster than the old 30-second wait.
 - If Amazon starts blocking or the LXC is too slow, lower `BROWSER_MAX_SEARCH_RESULT_PAGES` to `5`.
 - Optional Decodo mode still exists. If you use it later, set `SEARCH_PROVIDER=hybrid` and add `DECODO_AUTH_TOKEN`.
 

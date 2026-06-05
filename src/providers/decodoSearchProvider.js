@@ -3,13 +3,16 @@ const FREE_SHIPPING_FILTER = "p_n_is_free_shipping:10236242011";
 const SEARCH_SEED_TEMPLATES = [
   "{material} filament 1kg",
   "{material} filament",
+  "{material} filament 2kg",
+  "{material} filament 4.4lbs",
+  "{material} 2 pack filament",
+  "{material} multipack filament",
+  "Comgrow {material} filament",
+  "{material} filament bundle 1kg",
   "{material} 3d printer filament 1kg",
   "{material} 3d printer filament",
   "{material} 2 pack filament 1kg",
-  "{material} 2 pack filament",
-  "{material} 4 pack filament",
-  "{material} multipack filament",
-  "{material} filament bundle 1kg"
+  "{material} 4 pack filament"
 ];
 
 const BRAND_SEED_TEMPLATES = [
@@ -43,8 +46,10 @@ function buildFilteredAmazonSearchUrl(query, page = 1) {
 }
 
 function buildMaterialQueries(material) {
-  return [...SEARCH_SEED_TEMPLATES, ...WEIGHT_SEED_TEMPLATES, ...BRAND_SEED_TEMPLATES]
-    .map((template) => template.replace("{material}", material));
+  return [...new Set(
+    [...SEARCH_SEED_TEMPLATES, ...WEIGHT_SEED_TEMPLATES, ...BRAND_SEED_TEMPLATES]
+      .map((template) => template.replace("{material}", material))
+  )];
 }
 
 function authHeader(token) {

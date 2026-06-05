@@ -15,6 +15,9 @@ const {
   BROWSER_VERIFY_LIMIT_MANUAL,
   BROWSER_MAX_SEARCH_RESULT_PAGES,
   BROWSER_MAX_RAW_RESULT_ITEMS,
+  BROWSER_MAX_QUERIES_PER_MATERIAL,
+  BROWSER_SINGLE_MATERIAL_MAX_QUERIES,
+  BROWSER_RESULT_SELECTOR_TIMEOUT_MS,
   HEADLESS,
   BROWSER_CHANNEL,
   BROWSER_EXECUTABLE_PATH,
@@ -563,7 +566,7 @@ async function collectSearchPageItemsWithRetry(page, material) {
 
 async function collectSearchPageItems(page) {
   try {
-    await page.waitForSelector("[data-component-type='s-search-result']", { timeout: DEFAULT_TIMEOUT_MS });
+    await page.waitForSelector("[data-component-type='s-search-result']", { timeout: BROWSER_RESULT_SELECTOR_TIMEOUT_MS });
     return (await page.$$eval("[data-component-type='s-search-result']", (cards) =>
       cards.map((card) => {
         const extractAsinFromHref = (href) => {
@@ -770,7 +773,13 @@ async function collectBrowserSearchQuery(context, searchTarget, query, warnings)
     await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
     await detectBlockingState(page, material);
 
-    const firstItems = await collectSearchPageItemsWithRetry(page, material);
+    let firstItems = [];
+    try {
+      firstItems = await collectSearchPageItemsWithRetry(page, material);
+    } catch (error) {
+      warnings.push(`Skipped "${query}": ${error instanceof Error ? error.message : String(error)}`);
+      return [];
+    }
     if (!firstItems.length) {
       warnings.push(`Amazon closed or replaced the ${material} results page for "${query}" before items could be collected.`);
       return [];
@@ -796,7 +805,15 @@ async function collectBrowserSearchQuery(context, searchTarget, query, warnings)
         });
         await nextPage.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
         await detectBlockingState(nextPage, material);
-        const nextItems = await collectSearchPageItemsWithRetry(nextPage, material);
+        let nextItems = [];
+        try {
+          nextItems = await collectSearchPageItemsWithRetry(nextPage, material);
+        } catch (error) {
+          warnings.push(`Stopped later pages for "${query}": ${error instanceof Error ? error.message : String(error)}`);
+          nextPageHref = null;
+          pageCount += 1;
+          continue;
+        }
         if (!nextItems.length) {
           warnings.push(`Amazon closed or replaced a later ${material} results page for "${query}" before items could be collected.`);
           nextPageHref = null;
@@ -841,12 +858,17 @@ async function collectBrowserSearchQuery(context, searchTarget, query, warnings)
   }
 }
 
-async function searchMaterial(context, searchTarget) {
+async function searchMaterial(context, searchTarget, options = {}) {
   const warnings = [];
   const material = searchTarget.label;
-  const queries = Array.isArray(searchTarget.queries) && searchTarget.queries.length
+  let queries = Array.isArray(searchTarget.queries) && searchTarget.queries.length
     ? searchTarget.queries
     : [searchTarget.query];
+  const maxQueries = Number.isFinite(Number(options.maxQueries)) ? Number(options.maxQueries) : 0;
+  if (maxQueries > 0 && queries.length > maxQueries) {
+    warnings.push(`Using the first ${maxQueries} of ${queries.length} ${material} query seeds. Increase BROWSER_MAX_QUERIES_PER_MATERIAL for deeper Search All runs.`);
+    queries = queries.slice(0, maxQueries);
+  }
 
   const rawItems = [];
   for (const query of queries) {
@@ -919,6 +941,9 @@ async function runBrowserSearch(options = {}) {
     const warnings = [];
     const resultsByMaterial = Object.fromEntries(searchPlan.map((target) => [target.key, []]));
     const discountedResultsByMaterial = Object.fromEntries(searchPlan.map((target) => [target.key, []]));
+    const maxQueriesPerMaterial = searchPlan.length <= 1
+      ? BROWSER_SINGLE_MATERIAL_MAX_QUERIES
+      : BROWSER_MAX_QUERIES_PER_MATERIAL;
 
     for (const [index, searchTarget] of searchPlan.entries()) {
       const basePercent = 18 + Math.floor((index / searchPlan.length) * 72);
@@ -930,7 +955,9 @@ async function runBrowserSearch(options = {}) {
       });
 
       try {
-        const materialResults = await searchMaterial(context, searchTarget);
+        const materialResults = await searchMaterial(context, searchTarget, {
+          maxQueries: maxQueriesPerMaterial
+        });
         resultsByMaterial[searchTarget.key] = materialResults.results;
         discountedResultsByMaterial[searchTarget.key] = materialResults.discountedResults;
         warnings.push(...materialResults.warnings);

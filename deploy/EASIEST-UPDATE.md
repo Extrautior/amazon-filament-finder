@@ -66,12 +66,16 @@ RESULT_LIMIT=0
 SEARCH_PROVIDER=browser
 BROWSER_MAX_SEARCH_RESULT_PAGES=20
 BROWSER_MAX_RAW_RESULT_ITEMS=1000
+BROWSER_MAX_QUERIES_PER_MATERIAL=8
+BROWSER_RESULT_SELECTOR_TIMEOUT_MS=12000
 AUTO_REFRESH_HOURS=8,20
 ```
 
 `RESULT_LIMIT=0` means the app keeps every result it finds.
 
 `SEARCH_PROVIDER=browser` means no paid scraping API is used. The LXC's Chromium browser visits Amazon search pages with the free-shipping filter, crawls pagination up to `BROWSER_MAX_SEARCH_RESULT_PAGES`, and the app sorts the normalized results by effective price per kg.
+
+`BROWSER_MAX_QUERIES_PER_MATERIAL=8` keeps Search All from trying every possible brand/weight seed at once. Single-material searches can still use all seeds.
 
 ## If Something Fails
 
