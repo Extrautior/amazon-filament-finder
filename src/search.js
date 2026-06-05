@@ -168,6 +168,10 @@ function resolveAmazonUrl(href) {
   }
 }
 
+function shortErrorMessage(error) {
+  return (error instanceof Error ? error.message : String(error)).split(/\r?\n/)[0].trim();
+}
+
 function pickStandardPriceText(priceCandidates = []) {
   const candidates = Array.isArray(priceCandidates)
     ? priceCandidates
@@ -779,7 +783,7 @@ async function collectBrowserSearchQuery(context, searchTarget, query, warnings)
     try {
       firstItems = await collectSearchPageItemsWithRetry(page, material);
     } catch (error) {
-      warnings.push(`Skipped "${query}": ${error instanceof Error ? error.message : String(error)}`);
+      warnings.push(`Skipped "${query}": ${shortErrorMessage(error)}`);
       return [];
     }
     if (!firstItems.length) {
@@ -811,7 +815,7 @@ async function collectBrowserSearchQuery(context, searchTarget, query, warnings)
         try {
           nextItems = await collectSearchPageItemsWithRetry(nextPage, material);
         } catch (error) {
-          warnings.push(`Stopped later pages for "${query}": ${error instanceof Error ? error.message : String(error)}`);
+          warnings.push(`Stopped later pages for "${query}": ${shortErrorMessage(error)}`);
           nextPageHref = null;
           pageCount += 1;
           continue;
@@ -856,7 +860,7 @@ async function collectBrowserSearchQuery(context, searchTarget, query, warnings)
 
     return rawItems;
   } catch (error) {
-    warnings.push(`Skipped "${query}": ${error instanceof Error ? error.message : String(error)}`);
+    warnings.push(`Skipped "${query}": ${shortErrorMessage(error)}`);
     return [];
   } finally {
     if (page) {
@@ -873,7 +877,6 @@ async function searchMaterial(context, searchTarget, options = {}) {
     : [searchTarget.query];
   const maxQueries = Number.isFinite(Number(options.maxQueries)) ? Number(options.maxQueries) : 0;
   if (maxQueries > 0 && queries.length > maxQueries) {
-    warnings.push(`Using the first ${maxQueries} of ${queries.length} ${material} query seeds. Increase BROWSER_MAX_QUERIES_PER_MATERIAL for deeper Search All runs.`);
     queries = queries.slice(0, maxQueries);
   }
 
@@ -889,7 +892,7 @@ async function searchMaterial(context, searchTarget, options = {}) {
       try {
         rawItems.push(...await collectBrowserSearchQuery(context, searchTarget, query, warnings));
       } catch (error) {
-        warnings.push(`Skipped "${query}": ${error instanceof Error ? error.message : String(error)}`);
+        warnings.push(`Skipped "${query}": ${shortErrorMessage(error)}`);
       }
     }
   }
@@ -907,7 +910,7 @@ async function searchMaterial(context, searchTarget, options = {}) {
       filteredEligible: true
     });
 
-    if (!materialResults.results.length) {
+    if (!materialResults.results.length && dedupedRawItems.length) {
       warnings.push(`Zero parseable ${material} results remained after filtering.`);
     }
 
@@ -917,7 +920,7 @@ async function searchMaterial(context, searchTarget, options = {}) {
       warnings
     };
   } catch (error) {
-    warnings.push(`Failed to normalize ${material} browser results: ${error instanceof Error ? error.message : String(error)}`);
+    warnings.push(`Failed to normalize ${material} browser results: ${shortErrorMessage(error)}`);
     return {
       results: [],
       discountedResults: [],
@@ -1024,7 +1027,7 @@ async function runBrowserSearch(options = {}) {
         if (error instanceof SessionRequiredError) {
           throw error;
         }
-        warnings.push(`Search failed for ${searchTarget.label}: ${error instanceof Error ? error.message : String(error)}`);
+        warnings.push(`Search failed for ${searchTarget.label}: ${shortErrorMessage(error)}`);
         emitProgress(onProgress, {
           phase: "material-error",
           percent: 18 + Math.floor(((index + 1) / searchPlan.length) * 72),

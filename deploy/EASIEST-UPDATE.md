@@ -69,6 +69,7 @@ BROWSER_MAX_RAW_RESULT_ITEMS=1000
 BROWSER_MAX_QUERIES_PER_MATERIAL=8
 BROWSER_RESULT_SELECTOR_TIMEOUT_MS=12000
 BROWSER_SEARCH_CONCURRENCY=4
+BROWSER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-crash-reporter --disable-crashpad
 AUTO_REFRESH_HOURS=8,20
 ```
 

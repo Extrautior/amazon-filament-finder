@@ -83,7 +83,7 @@ set_env DATA_DIR "/var/lib/amazon-filament-finder"
 set_env AMAZON_SESSION_DIR "/var/lib/amazon-filament-finder/amazon-session"
 set_env HEADLESS "true"
 set_env BROWSER_EXECUTABLE_PATH "/usr/bin/chromium"
-set_env BROWSER_ARGS "--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage"
+set_env BROWSER_ARGS "--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-crash-reporter --disable-crashpad"
 
 if [[ -n "${APP_PASSWORD_INPUT}" ]]; then
   set_env APP_PASSWORD "${APP_PASSWORD_INPUT}"

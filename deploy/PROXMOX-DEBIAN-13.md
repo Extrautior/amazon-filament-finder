@@ -112,7 +112,7 @@ DATA_DIR=/var/lib/amazon-filament-finder
 AMAZON_SESSION_DIR=/var/lib/amazon-filament-finder/amazon-session
 HEADLESS=true
 BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
-BROWSER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage
+BROWSER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-crash-reporter --disable-crashpad
 EOF
 chmod 600 /etc/amazon-filament-finder.env
 ```
