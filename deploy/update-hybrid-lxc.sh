@@ -43,10 +43,11 @@ echo "==> Preparing ${ENV_FILE}"
 touch "${ENV_FILE}"
 chmod 600 "${ENV_FILE}"
 
-read -r -p "Decodo auth token or username:password: " DECODO_AUTH_TOKEN_INPUT
 read -r -p "App password for the web UI [leave blank to keep existing]: " APP_PASSWORD_INPUT
-read -r -p "Max Decodo requests per run [10 for free-plan testing]: " DECODO_MAX_REQUESTS_INPUT
-DECODO_MAX_REQUESTS_INPUT="${DECODO_MAX_REQUESTS_INPUT:-10}"
+read -r -p "Max browser search pages per query [20]: " BROWSER_MAX_PAGES_INPUT
+BROWSER_MAX_PAGES_INPUT="${BROWSER_MAX_PAGES_INPUT:-20}"
+read -r -p "Max raw browser items per query [1000]: " BROWSER_MAX_ITEMS_INPUT
+BROWSER_MAX_ITEMS_INPUT="${BROWSER_MAX_ITEMS_INPUT:-1000}"
 
 set_env() {
   local key="$1"
@@ -63,12 +64,13 @@ set_env() {
 set_env PORT "${PORT:-3017}"
 set_env RESULT_LIMIT "0"
 set_env SEARCH_TIMEOUT_MS "${SEARCH_TIMEOUT_MS:-30000}"
-set_env SEARCH_PROVIDER "hybrid"
-set_env DECODO_AUTH_TOKEN "${DECODO_AUTH_TOKEN_INPUT}"
+set_env SEARCH_PROVIDER "browser"
 set_env DECODO_GEO "Israel"
-set_env DECODO_MAX_REQUESTS_PER_RUN "${DECODO_MAX_REQUESTS_INPUT}"
+set_env DECODO_MAX_REQUESTS_PER_RUN "10"
 set_env BROWSER_VERIFY_LIMIT_SCHEDULED "5"
 set_env BROWSER_VERIFY_LIMIT_MANUAL "25"
+set_env BROWSER_MAX_SEARCH_RESULT_PAGES "${BROWSER_MAX_PAGES_INPUT}"
+set_env BROWSER_MAX_RAW_RESULT_ITEMS "${BROWSER_MAX_ITEMS_INPUT}"
 set_env ENABLE_LEGACY_BROWSER_SEARCH "false"
 set_env AUTO_REFRESH_ENABLED "true"
 set_env AUTO_REFRESH_TIMEZONE "Asia/Jerusalem"

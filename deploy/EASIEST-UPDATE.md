@@ -16,21 +16,21 @@ The app still keeps:
 
 The new version adds:
 
-- Decodo search instead of fragile Amazon search-page browser scraping
+- a no-paid-API browser scraper that crawls more Amazon result pages
 - all results by default with `RESULT_LIMIT=0`
 - bundle support
 - price per kg sorting
 - ASA support
-- optional browser verification for unclear top results
+- optional Decodo mode if you later decide an API is worth paying for
 
 ## Step 1: Push This Code To GitHub
 
-On your PC, in this project folder:
+I already pushed the update to GitHub. You do not need this step unless you make your own edits later.
 
 ```powershell
 git status
 git add .
-git commit -m "Add hybrid Decodo filament scraper"
+git commit -m "Update filament scraper"
 git push origin master
 ```
 
@@ -45,11 +45,11 @@ sudo bash deploy/update-hybrid-lxc.sh
 
 The script will ask for:
 
-- your Decodo auth token, or `username:password`
 - your app password, or blank to keep the existing password
-- max Decodo requests per run, default `10`
+- max browser pages per query, default `20`
+- max raw browser items per query, default `1000`
 
-Use `3` first for a tiny smoke test. Press Enter for `10` once you know the token works. Only use `100` or more after you are comfortable with Decodo billing/usage.
+Press Enter for both browser limits first. If Amazon starts blocking or searches take too long, rerun the script and lower pages to `5`.
 
 ## Step 3: Open The App
 
@@ -63,15 +63,15 @@ These are the settings that make the new scraper behave how you asked:
 
 ```bash
 RESULT_LIMIT=0
-SEARCH_PROVIDER=hybrid
-DECODO_GEO=Israel
-DECODO_MAX_REQUESTS_PER_RUN=10
+SEARCH_PROVIDER=browser
+BROWSER_MAX_SEARCH_RESULT_PAGES=20
+BROWSER_MAX_RAW_RESULT_ITEMS=1000
 AUTO_REFRESH_HOURS=8,20
 ```
 
 `RESULT_LIMIT=0` means the app keeps every result it finds.
 
-`DECODO_MAX_REQUESTS_PER_RUN=10` means the app may fetch up to 10 filtered Amazon pages per run. With two scheduled runs per day, this can use up to about 600 Decodo requests per month. A value of `100` can use up to about 6,000 Decodo requests per month.
+`SEARCH_PROVIDER=browser` means no paid scraping API is used. The LXC's Chromium browser visits Amazon search pages with the free-shipping filter, crawls pagination up to `BROWSER_MAX_SEARCH_RESULT_PAGES`, and the app sorts the normalized results by effective price per kg.
 
 ## If Something Fails
 
@@ -83,9 +83,9 @@ journalctl -u amazon-filament-finder -n 100 --no-pager
 curl http://127.0.0.1:3017/health
 ```
 
-If health says `DECODO_AUTH_TOKEN is missing`, rerun:
+If the browser session expires, rerun:
 
 ```bash
 cd /opt/amazon-filament-finder
-sudo bash deploy/update-hybrid-lxc.sh
+sudo -u amazon-filament-finder env $(cat /etc/amazon-filament-finder.env | xargs) bash -lc 'HEADLESS=false npm run session:setup'
 ```

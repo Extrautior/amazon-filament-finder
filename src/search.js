@@ -13,7 +13,8 @@ const {
   DECODO_MAX_REQUESTS_PER_RUN,
   BROWSER_VERIFY_LIMIT_SCHEDULED,
   BROWSER_VERIFY_LIMIT_MANUAL,
-  ENABLE_LEGACY_BROWSER_SEARCH,
+  BROWSER_MAX_SEARCH_RESULT_PAGES,
+  BROWSER_MAX_RAW_RESULT_ITEMS,
   HEADLESS,
   BROWSER_CHANNEL,
   BROWSER_EXECUTABLE_PATH,
@@ -50,8 +51,6 @@ class SessionBusyError extends Error {
 }
 
 const SESSION_LOCK_FILES = ["SingletonLock", "SingletonSocket", "SingletonCookie"];
-const MAX_SEARCH_RESULT_PAGES = 6;
-const MAX_RAW_RESULT_ITEMS = 180;
 const MAX_FREE_SHIPPING_QUANTITY_CHECK = 6;
 
 function getChromium() {
@@ -760,31 +759,35 @@ async function verifyProductPagePricing(context, item, material) {
   }
 }
 
-async function searchMaterial(context, searchTarget) {
+async function collectBrowserSearchQuery(context, searchTarget, query, warnings) {
   const page = await context.newPage();
-  const warnings = [];
   const material = searchTarget.label;
+  let rawItems = [];
+  const seenAsins = new Set();
 
   try {
-    const query = searchTarget.query;
     await page.goto(buildSearchUrl(query), { waitUntil: "domcontentloaded", timeout: DEFAULT_TIMEOUT_MS });
     await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
     await detectBlockingState(page, material);
 
-    let rawItems = await collectSearchPageItemsWithRetry(page, material);
-    if (!rawItems.length) {
-      warnings.push(`Amazon closed or replaced the ${material} results page before items could be collected.`);
-      return {
-        results: [],
-        discountedResults: [],
-        warnings
-      };
+    const firstItems = await collectSearchPageItemsWithRetry(page, material);
+    if (!firstItems.length) {
+      warnings.push(`Amazon closed or replaced the ${material} results page for "${query}" before items could be collected.`);
+      return [];
+    }
+
+    for (const item of firstItems) {
+      const asin = item.asin || extractAsinFromItem(item);
+      if (asin) {
+        seenAsins.add(asin);
+      }
+      rawItems.push({ ...item, searchQuery: query, sourceUrl: page.url() });
     }
 
     let nextPageHref = await page.locator("a.s-pagination-next").first().getAttribute("href").catch(() => null);
     let pageCount = 1;
 
-    while (nextPageHref && rawItems.length < MAX_RAW_RESULT_ITEMS && pageCount < MAX_SEARCH_RESULT_PAGES) {
+    while (nextPageHref && rawItems.length < BROWSER_MAX_RAW_RESULT_ITEMS && pageCount < BROWSER_MAX_SEARCH_RESULT_PAGES) {
       const nextPage = await context.newPage();
       try {
         await nextPage.goto(resolveAmazonUrl(nextPageHref), {
@@ -795,12 +798,29 @@ async function searchMaterial(context, searchTarget) {
         await detectBlockingState(nextPage, material);
         const nextItems = await collectSearchPageItemsWithRetry(nextPage, material);
         if (!nextItems.length) {
-          warnings.push(`Amazon closed or replaced a later ${material} results page before items could be collected.`);
+          warnings.push(`Amazon closed or replaced a later ${material} results page for "${query}" before items could be collected.`);
           nextPageHref = null;
           pageCount += 1;
           continue;
         }
-        rawItems = rawItems.concat(nextItems);
+
+        let newAsins = 0;
+        for (const item of nextItems) {
+          const asin = item.asin || extractAsinFromItem(item);
+          if (asin && seenAsins.has(asin)) {
+            continue;
+          }
+          if (asin) {
+            seenAsins.add(asin);
+            newAsins += 1;
+          }
+          rawItems.push({ ...item, searchQuery: query, sourceUrl: nextPage.url() });
+        }
+
+        if (newAsins === 0) {
+          break;
+        }
+
         nextPageHref = await nextPage.locator("a.s-pagination-next").first().getAttribute("href").catch(() => null);
         pageCount += 1;
       } finally {
@@ -808,7 +828,34 @@ async function searchMaterial(context, searchTarget) {
       }
     }
 
-    const materialResults = normalizeMaterialResults(material, rawItems.map((item) => ({
+    if (nextPageHref && pageCount >= BROWSER_MAX_SEARCH_RESULT_PAGES) {
+      warnings.push(`Stopped "${query}" after ${BROWSER_MAX_SEARCH_RESULT_PAGES} browser result pages. Raise BROWSER_MAX_SEARCH_RESULT_PAGES to crawl deeper.`);
+    }
+    if (rawItems.length >= BROWSER_MAX_RAW_RESULT_ITEMS) {
+      warnings.push(`Stopped "${query}" after ${BROWSER_MAX_RAW_RESULT_ITEMS} raw browser items. Raise BROWSER_MAX_RAW_RESULT_ITEMS to keep more.`);
+    }
+
+    return rawItems;
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+async function searchMaterial(context, searchTarget) {
+  const warnings = [];
+  const material = searchTarget.label;
+  const queries = Array.isArray(searchTarget.queries) && searchTarget.queries.length
+    ? searchTarget.queries
+    : [searchTarget.query];
+
+  const rawItems = [];
+  for (const query of queries) {
+    rawItems.push(...await collectBrowserSearchQuery(context, searchTarget, query, warnings));
+  }
+
+  try {
+    const dedupedRawItems = dedupeRawItems(rawItems);
+    const materialResults = normalizeMaterialResults(material, dedupedRawItems.map((item) => ({
       ...item,
       url: item.asin ? `https://www.amazon.com/dp/${item.asin}` : resolveAmazonUrl(item.url)
     })), {
@@ -826,8 +873,13 @@ async function searchMaterial(context, searchTarget) {
       discountedResults: materialResults.discountedResults,
       warnings
     };
-  } finally {
-    await page.close().catch(() => {});
+  } catch (error) {
+    warnings.push(`Failed to normalize ${material} browser results: ${error instanceof Error ? error.message : String(error)}`);
+    return {
+      results: [],
+      discountedResults: [],
+      warnings
+    };
   }
 }
 
@@ -912,6 +964,7 @@ async function runBrowserSearch(options = {}) {
     return {
       searchedAt: new Date().toISOString(),
       marketplace: DEFAULT_MARKETPLACE,
+      searchProvider: "browser",
       searchPlan,
       resultsByMaterial,
       discountedResultsByMaterial,
@@ -1151,9 +1204,6 @@ async function runHybridSearch(options = {}) {
 async function runSearch(options = {}) {
   const provider = String(options.searchProvider || SEARCH_PROVIDER || "hybrid").toLowerCase();
   if (provider === "browser") {
-    if (!ENABLE_LEGACY_BROWSER_SEARCH) {
-      throw new Error("Legacy browser search is disabled. Set ENABLE_LEGACY_BROWSER_SEARCH=true to use SEARCH_PROVIDER=browser.");
-    }
     return runBrowserSearch(options);
   }
   if (provider === "hybrid" || provider === "decodo") {
@@ -1181,6 +1231,7 @@ module.exports = {
   openSessionBrowser,
   buildQuantityProbeList,
   extractAsinFromAmazonHref,
+  buildSearchUrl,
   resolveAmazonUrl,
   runSearch
 };

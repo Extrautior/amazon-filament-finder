@@ -1,6 +1,6 @@
-# Update Existing Proxmox LXC to Hybrid Decodo Search
+# Update Existing Proxmox LXC to Free Browser Search
 
-Use this on the LXC that already runs Amazon Filament Finder.
+Use this on the LXC that already runs Amazon Filament Finder. The default mode uses the LXC's Chromium browser instead of a paid scraping API.
 
 ## 1. Copy or pull the updated code
 
@@ -32,18 +32,20 @@ Edit the env file:
 nano /etc/amazon-filament-finder.env
 ```
 
-Use these hybrid settings:
+Use these browser settings:
 
 ```bash
 PORT=3017
 RESULT_LIMIT=0
 SEARCH_TIMEOUT_MS=30000
-SEARCH_PROVIDER=hybrid
-DECODO_AUTH_TOKEN=YOUR_DECODO_BASIC_TOKEN_OR_USERNAME_PASSWORD
+SEARCH_PROVIDER=browser
+DECODO_AUTH_TOKEN=
 DECODO_GEO=Israel
 DECODO_MAX_REQUESTS_PER_RUN=10
 BROWSER_VERIFY_LIMIT_SCHEDULED=5
 BROWSER_VERIFY_LIMIT_MANUAL=25
+BROWSER_MAX_SEARCH_RESULT_PAGES=20
+BROWSER_MAX_RAW_RESULT_ITEMS=1000
 ENABLE_LEGACY_BROWSER_SEARCH=false
 AUTO_REFRESH_ENABLED=true
 AUTO_REFRESH_TIMEZONE=Asia/Jerusalem
@@ -59,10 +61,11 @@ BROWSER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage
 Notes:
 
 - `RESULT_LIMIT=0` means show/export every result found.
-- `DECODO_MAX_REQUESTS_PER_RUN=10` means one scan can fetch up to 10 filtered Amazon pages across all search seeds/materials.
-- For 2 automatic runs per day, 10 requests/run can use up to about 600 Decodo requests/month.
-- For a first smoke test, use `3`. For deeper scans, raise this only after you are comfortable with Decodo billing/usage. A value of `100` can use up to about 6,000 Decodo requests/month.
-- `DECODO_AUTH_TOKEN` can be either Decodo's Basic token value or `username:password`; the app accepts both.
+- `SEARCH_PROVIDER=browser` means no paid API is used.
+- `BROWSER_MAX_SEARCH_RESULT_PAGES=20` means one query can crawl up to 20 Amazon result pages.
+- `BROWSER_MAX_RAW_RESULT_ITEMS=1000` prevents one bad search from growing forever.
+- If Amazon starts blocking or the LXC is too slow, lower `BROWSER_MAX_SEARCH_RESULT_PAGES` to `5`.
+- Optional Decodo mode still exists. If you use it later, set `SEARCH_PROVIDER=hybrid` and add `DECODO_AUTH_TOKEN`.
 
 Protect the env file:
 
@@ -86,15 +89,15 @@ journalctl -u amazon-filament-finder -n 100 --no-pager
 tail -n 100 /var/lib/amazon-filament-finder/logs/app-$(date +%F).log
 ```
 
-Health should show `sessionStatus` as `ready` when `DECODO_AUTH_TOKEN` is configured.
+Health should show `sessionStatus` as `ready` when the Amazon browser session is configured.
 
 ## 6. Run a tiny live smoke test first
 
 Temporarily set:
 
 ```bash
-DECODO_MAX_REQUESTS_PER_RUN=3
-BROWSER_VERIFY_LIMIT_SCHEDULED=0
+BROWSER_MAX_SEARCH_RESULT_PAGES=2
+BROWSER_MAX_RAW_RESULT_ITEMS=100
 ```
 
 Restart the service, run one manual PLA search in the UI, and confirm results/export work.
@@ -105,9 +108,9 @@ Then restore your real values and restart:
 systemctl restart amazon-filament-finder
 ```
 
-## 7. Optional browser verification
+## 7. Browser session
 
-Hybrid search works without an Amazon browser session, but product-page verification uses the old Playwright session if available. If verification warnings say the browser session is missing or expired, either ignore them or rerun:
+Browser search needs the saved Amazon session. If warnings say the browser session is missing or expired, rerun:
 
 ```bash
 cd /opt/amazon-filament-finder

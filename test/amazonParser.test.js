@@ -17,6 +17,7 @@ const {
   extractProductPageRegularPrice,
   buildQuantityProbeList,
   extractAsinFromAmazonHref,
+  buildSearchUrl,
   isProfileLockError,
   pickStandardPriceText,
   resolveAmazonUrl
@@ -377,6 +378,27 @@ test("buildSearchPlan uses only the custom term when no materials are selected",
       queries: ["ASA filament"]
     }
   ]);
+});
+
+test("buildSearchPlan includes bundle query seeds for material searches", () => {
+  const [plan] = buildSearchPlan({ materials: ["PLA"] });
+
+  assert.deepEqual(plan.queries, [
+    "PLA filament 1kg",
+    "PLA 3d printer filament 1kg",
+    "PLA 2 pack filament 1kg",
+    "PLA filament bundle 1kg"
+  ]);
+});
+
+test("buildSearchUrl uses Amazon free-shipping filter and price sort", () => {
+  const url = new URL(buildSearchUrl("PLA filament 1kg"));
+
+  assert.equal(url.hostname, "www.amazon.com");
+  assert.equal(url.pathname, "/s");
+  assert.equal(url.searchParams.get("k"), "PLA filament 1kg");
+  assert.equal(url.searchParams.get("rh"), "p_n_is_free_shipping:10236242011");
+  assert.equal(url.searchParams.get("s"), "price-asc-rank");
 });
 
 test("pickStandardPriceText prefers the regular listing price over Prime-only pricing", () => {
