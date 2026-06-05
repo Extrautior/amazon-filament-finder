@@ -92,8 +92,15 @@ Create `/etc/amazon-filament-finder.env`:
 ```bash
 cat >/etc/amazon-filament-finder.env <<'EOF'
 PORT=3017
-RESULT_LIMIT=10
+RESULT_LIMIT=0
 SEARCH_TIMEOUT_MS=30000
+SEARCH_PROVIDER=hybrid
+DECODO_AUTH_TOKEN=change-this-to-your-decodo-basic-token-or-username-password
+DECODO_GEO=Israel
+DECODO_MAX_REQUESTS_PER_RUN=100
+BROWSER_VERIFY_LIMIT_SCHEDULED=5
+BROWSER_VERIFY_LIMIT_MANUAL=25
+ENABLE_LEGACY_BROWSER_SEARCH=false
 APP_PASSWORD=change-this-to-a-shared-password
 DATA_DIR=/var/lib/amazon-filament-finder
 AMAZON_SESSION_DIR=/var/lib/amazon-filament-finder/amazon-session

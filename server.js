@@ -387,6 +387,7 @@ function startHostedSearch(searchRequest, options = {}) {
     try {
       const payload = await runSearch({
         ...searchRequest,
+        trigger,
         onProgress(update) {
           setSearchProgress({
             jobId,

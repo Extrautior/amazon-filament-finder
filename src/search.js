@@ -7,12 +7,23 @@ const {
   AMAZON_SESSION_DIR,
   SEARCH_BASE_URL,
   SEARCH_TERMS,
+  SEARCH_PROVIDER,
+  DECODO_AUTH_TOKEN,
+  DECODO_GEO,
+  DECODO_MAX_REQUESTS_PER_RUN,
+  BROWSER_VERIFY_LIMIT_SCHEDULED,
+  BROWSER_VERIFY_LIMIT_MANUAL,
+  ENABLE_LEGACY_BROWSER_SEARCH,
   HEADLESS,
   BROWSER_CHANNEL,
   BROWSER_EXECUTABLE_PATH,
   BROWSER_ARGS
 } = require("./config");
 const { normalizeMaterialResults } = require("./amazonParser");
+const {
+  buildMaterialQueries,
+  fetchDecodoSearchPage
+} = require("./providers/decodoSearchProvider");
 
 const AUTH_COOKIE_NAMES = new Set([
   "at-main",
@@ -66,7 +77,8 @@ function buildSearchPlan(options = {}) {
       plan.push({
         key: material,
         label: material,
-        query: SEARCH_TERMS[material]
+        query: SEARCH_TERMS[material],
+        queries: buildMaterialQueries(material)
       });
     }
   } else if (!customTerm) {
@@ -74,7 +86,8 @@ function buildSearchPlan(options = {}) {
       plan.push({
         key: material,
         label: material,
-        query: SEARCH_TERMS[material]
+        query: SEARCH_TERMS[material],
+        queries: buildMaterialQueries(material)
       });
     }
   }
@@ -83,7 +96,8 @@ function buildSearchPlan(options = {}) {
     plan.push({
       key: slugify(customTerm),
       label: customTerm,
-      query: customTerm
+      query: customTerm,
+      queries: [customTerm]
     });
   }
 
@@ -469,6 +483,18 @@ async function inspectAmazonSession(context) {
 }
 
 async function getSessionStatus() {
+  if (SEARCH_PROVIDER !== "browser") {
+    return {
+      status: DECODO_AUTH_TOKEN ? "ready" : "missing",
+      message: DECODO_AUTH_TOKEN
+        ? "Decodo API credentials are configured. Browser verification is optional in hybrid mode."
+        : "DECODO_AUTH_TOKEN is missing. Add it to the service environment before running hybrid searches.",
+      cookieCount: 0,
+      likelyAuthenticated: Boolean(DECODO_AUTH_TOKEN),
+      provider: SEARCH_PROVIDER
+    };
+  }
+
   let context;
   try {
     context = await launchSessionContext({ headless: true });
@@ -814,7 +840,7 @@ function emitProgress(onProgress, update) {
   }
 }
 
-async function runSearch(options = {}) {
+async function runBrowserSearch(options = {}) {
   const { onProgress } = options;
   const searchPlan = buildSearchPlan(options);
   let context;
@@ -902,6 +928,238 @@ async function runSearch(options = {}) {
       message: "Search complete."
     });
   }
+}
+
+function dedupeRawItems(rawItems) {
+  const deduped = new Map();
+
+  for (const item of rawItems) {
+    const asin = item.asin || extractAsinFromItem(item);
+    const key = asin || `${item.title || ""}:${item.priceText || ""}`.toLowerCase();
+    if (!key) {
+      continue;
+    }
+
+    const existing = deduped.get(key);
+    if (!existing || String(item.deliveryText || item.shippingText || "").length > String(existing.deliveryText || existing.shippingText || "").length) {
+      deduped.set(key, {
+        ...item,
+        asin: asin || item.asin
+      });
+    }
+  }
+
+  return [...deduped.values()];
+}
+
+function extractAsinFromItem(item) {
+  if (item?.asin) {
+    return item.asin;
+  }
+  const match = String(item?.url || "").match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i);
+  return match ? match[1].toUpperCase() : "";
+}
+
+function itemNeedsBrowserVerification(item, index) {
+  const text = `${item.title || ""} ${item.shippingText || ""} ${item.deliveryText || ""} ${item.badgeText || ""}`;
+  if (index < 3) {
+    return true;
+  }
+  if (!/(free|shipping|delivery|Israel|eligible orders)/i.test(text)) {
+    return true;
+  }
+  return /\b(?:bundle|pack|multi|2\s*x|3\s*x|4\s*x|\d+\s?pack)\b/i.test(text);
+}
+
+async function verifyHybridCandidates(rawItems, material, verifyLimit, warnings) {
+  if (!verifyLimit || verifyLimit <= 0 || !rawItems.length) {
+    return rawItems;
+  }
+
+  const candidates = rawItems
+    .map((item, index) => ({ item, index }))
+    .filter(({ item, index }) => itemNeedsBrowserVerification(item, index))
+    .slice(0, verifyLimit);
+
+  if (!candidates.length) {
+    return rawItems;
+  }
+
+  let context;
+  try {
+    context = await launchSessionContext({ headless: true });
+    const sessionStatus = await inspectAmazonSession(context);
+    if (sessionStatus.status !== "ready") {
+      warnings.push(`Skipped browser verification for ${material}: ${sessionStatus.message}`);
+      return rawItems;
+    }
+
+    const updated = [...rawItems];
+    for (const { item, index } of candidates) {
+      updated[index] = await verifyProductPagePricing(context, item, material);
+    }
+    return updated;
+  } catch (error) {
+    warnings.push(`Skipped browser verification for ${material}: ${error instanceof Error ? error.message : String(error)}`);
+    return rawItems;
+  } finally {
+    if (context) {
+      await context.close().catch(() => {});
+    }
+  }
+}
+
+async function collectDecodoMaterial(searchTarget, budgetState, options = {}) {
+  const warnings = [];
+  const rawItems = [];
+  const seenAsins = new Set();
+  const queries = Array.isArray(searchTarget.queries) && searchTarget.queries.length
+    ? searchTarget.queries
+    : [searchTarget.query];
+  const maxPagesPerQuery = options.maxPagesPerQuery || budgetState.max;
+
+  for (const query of queries) {
+    for (let pageNumber = 1; pageNumber <= maxPagesPerQuery; pageNumber += 1) {
+      if (budgetState.used >= budgetState.max) {
+        warnings.push(`Stopped ${searchTarget.label} early after using the Decodo request budget (${budgetState.max}).`);
+        return { rawItems: dedupeRawItems(rawItems), warnings };
+      }
+
+      budgetState.used += 1;
+      const pageResult = await fetchDecodoSearchPage({
+        token: options.decodoAuthToken || DECODO_AUTH_TOKEN,
+        geo: options.decodoGeo || DECODO_GEO,
+        query,
+        page: pageNumber,
+        fetchImpl: options.fetchImpl
+      });
+
+      let newAsins = 0;
+      for (const item of pageResult.items) {
+        const asin = item.asin || extractAsinFromItem(item);
+        if (asin && seenAsins.has(asin)) {
+          continue;
+        }
+        if (asin) {
+          seenAsins.add(asin);
+          newAsins += 1;
+        }
+        rawItems.push({
+          ...item,
+          searchQuery: query,
+          sourceUrl: pageResult.amazonUrl
+        });
+      }
+
+      if (!pageResult.items.length || newAsins === 0) {
+        break;
+      }
+    }
+  }
+
+  return { rawItems: dedupeRawItems(rawItems), warnings };
+}
+
+async function runHybridSearch(options = {}) {
+  const { onProgress } = options;
+  const searchPlan = buildSearchPlan(options);
+  const warnings = [];
+  const resultsByMaterial = Object.fromEntries(searchPlan.map((target) => [target.key, []]));
+  const discountedResultsByMaterial = Object.fromEntries(searchPlan.map((target) => [target.key, []]));
+  const budgetState = {
+    used: 0,
+    max: options.decodoRequestBudget || DECODO_MAX_REQUESTS_PER_RUN
+  };
+  const verifyLimit = options.browserVerifyLimit ?? (
+    options.trigger === "manual" ? BROWSER_VERIFY_LIMIT_MANUAL : BROWSER_VERIFY_LIMIT_SCHEDULED
+  );
+
+  emitProgress(onProgress, {
+    phase: "starting",
+    percent: 5,
+    activeMaterial: null,
+    message: "Starting Decodo-backed Amazon search."
+  });
+
+  for (const [index, searchTarget] of searchPlan.entries()) {
+    const basePercent = 10 + Math.floor((index / searchPlan.length) * 82);
+    emitProgress(onProgress, {
+      phase: "material-start",
+      percent: basePercent,
+      activeMaterial: searchTarget.label,
+      message: `Searching filtered ${searchTarget.label} listings with Decodo.`
+    });
+
+    try {
+      const collected = await collectDecodoMaterial(searchTarget, budgetState, options);
+      warnings.push(...collected.warnings);
+      const verifiedItems = await verifyHybridCandidates(
+        collected.rawItems,
+        searchTarget.label,
+        verifyLimit,
+        warnings
+      );
+      const materialResults = normalizeMaterialResults(searchTarget.label, verifiedItems, {
+        destinationConfirmed: false,
+        freeShippingMode: true,
+        filteredEligible: true
+      });
+
+      resultsByMaterial[searchTarget.key] = materialResults.results;
+      discountedResultsByMaterial[searchTarget.key] = materialResults.discountedResults;
+      if (!materialResults.results.length) {
+        warnings.push(`Zero parseable ${searchTarget.label} results remained after filtering.`);
+      }
+    } catch (error) {
+      warnings.push(`Search failed for ${searchTarget.label}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    emitProgress(onProgress, {
+      phase: "material-complete",
+      percent: 10 + Math.floor(((index + 1) / searchPlan.length) * 82),
+      activeMaterial: searchTarget.label,
+      message: `Finished ${searchTarget.label}.`
+    });
+  }
+
+  emitProgress(onProgress, {
+    phase: "finalizing",
+    percent: 96,
+    activeMaterial: null,
+    message: "Finalizing grouped results."
+  });
+
+  emitProgress(onProgress, {
+    phase: "complete",
+    percent: 100,
+    activeMaterial: null,
+    message: "Search complete."
+  });
+
+  return {
+    searchedAt: new Date().toISOString(),
+    marketplace: DEFAULT_MARKETPLACE,
+    searchProvider: "hybrid-decodo",
+    decodoRequestsUsed: budgetState.used,
+    searchPlan,
+    resultsByMaterial,
+    discountedResultsByMaterial,
+    warnings
+  };
+}
+
+async function runSearch(options = {}) {
+  const provider = String(options.searchProvider || SEARCH_PROVIDER || "hybrid").toLowerCase();
+  if (provider === "browser") {
+    if (!ENABLE_LEGACY_BROWSER_SEARCH) {
+      throw new Error("Legacy browser search is disabled. Set ENABLE_LEGACY_BROWSER_SEARCH=true to use SEARCH_PROVIDER=browser.");
+    }
+    return runBrowserSearch(options);
+  }
+  if (provider === "hybrid" || provider === "decodo") {
+    return runHybridSearch(options);
+  }
+  throw new Error(`Unsupported SEARCH_PROVIDER "${provider}". Use "hybrid", "decodo", or "browser".`);
 }
 
 async function openSessionBrowser() {

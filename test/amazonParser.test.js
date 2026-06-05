@@ -5,6 +5,8 @@ const {
   parsePrice,
   normalizeMaterialResults,
   parseDiscountPercent,
+  parseShippingStatus,
+  parseSpoolInfo,
   selectCheapestWithColorCoverage,
   mergeDiscountsIntoCheapestRange
 } = require("../src/amazonParser");
@@ -33,7 +35,7 @@ test("materialMatches keeps strict material matches", () => {
   assert.equal(materialMatches("TPU", "ABS tough spool 1kg"), false);
 });
 
-test("normalizeMaterialResults filters Israel-eligible items and sorts by total", () => {
+test("normalizeMaterialResults filters Israel-eligible items and sorts by delivered price per kg", () => {
   const payload = normalizeMaterialResults("PLA", [
     {
       title: "Brand PLA Filament 1kg",
@@ -69,8 +71,8 @@ test("normalizeMaterialResults filters Israel-eligible items and sorts by total"
   const results = payload.results;
 
   assert.equal(results.length, 2);
-  assert.equal(results[0].title, "Cheap PLA Filament 1kg");
-  assert.equal(results[1].title, "Brand PLA Filament 1kg");
+  assert.equal(results[0].title, "Brand PLA Filament 1kg");
+  assert.equal(results[1].title, "Cheap PLA Filament 1kg");
 });
 
 test("normalizeMaterialResults keeps items without explicit Israel text when the session destination is already confirmed", () => {
@@ -227,6 +229,69 @@ test("materialMatches requires a 1kg-style spool size", () => {
   assert.equal(materialMatches("PLA", "PLA+ Filament 2.2lbs Spool"), true);
 });
 
+test("parseSpoolInfo accepts full 1kg spool bundles", () => {
+  assert.deepEqual(parseSpoolInfo("PLA Filament 2 Pack 1kg Spool"), {
+    packCount: 2,
+    spoolKg: 1,
+    totalKg: 2
+  });
+  assert.deepEqual(parseSpoolInfo("PETG Filament 4 x 1KG Bundle"), {
+    packCount: 4,
+    spoolKg: 1,
+    totalKg: 4
+  });
+  assert.deepEqual(parseSpoolInfo("PLA Filament 10KG Bundle"), {
+    packCount: 10,
+    spoolKg: 1,
+    totalKg: 10
+  });
+});
+
+test("materialMatches rejects accessories, samples, and mixed-material listings", () => {
+  assert.equal(materialMatches("PLA", "PLA Filament Dryer Box 1kg"), false);
+  assert.equal(materialMatches("PLA", "PLA Filament 500g Sample Pack"), false);
+  assert.equal(materialMatches("PLA", "PLA ASA Filament Bundle 1kg"), false);
+  assert.equal(materialMatches("ASA", "ASA Filament 1kg Spool"), true);
+});
+
+test("parseShippingStatus classifies Israel shipping states", () => {
+  assert.equal(parseShippingStatus("FREE delivery to Israel"), "free_to_israel");
+  assert.equal(
+    parseShippingStatus("FREE delivery Sunday to Israel on eligible orders over $49"),
+    "free_over_threshold_to_israel"
+  );
+  assert.equal(parseShippingStatus("$6.99 Shipping to Israel"), "paid_shipping");
+  assert.equal(parseShippingStatus("This item cannot be shipped to your selected delivery location"), "not_shippable");
+  assert.equal(parseShippingStatus("Delivery date unavailable"), "unknown");
+});
+
+test("normalizeMaterialResults sorts bundles by effective price per kg", () => {
+  const payload = normalizeMaterialResults("PLA", [
+    {
+      title: "PLA Filament Single 1kg",
+      url: "https://www.amazon.com/dp/B000000020",
+      priceText: "$12.00",
+      shippingText: "FREE delivery to Israel",
+      deliveryText: "FREE delivery to Israel",
+      importFeesText: "",
+      capturedAt: "2026-04-21T12:00:00.000Z"
+    },
+    {
+      title: "PLA Filament 4 Pack 1kg",
+      url: "https://www.amazon.com/dp/B000000021",
+      priceText: "$36.00",
+      shippingText: "FREE delivery to Israel",
+      deliveryText: "FREE delivery to Israel",
+      importFeesText: "",
+      capturedAt: "2026-04-21T12:00:00.000Z"
+    }
+  ], { freeShippingMode: true });
+
+  assert.equal(payload.results[0].title, "PLA Filament 4 Pack 1kg");
+  assert.equal(payload.results[0].totalKg, 4);
+  assert.equal(payload.results[0].pricePerKg, 9);
+});
+
 test("payloadToCsv exports normalized result rows", () => {
   const csv = payloadToCsv({
     searchedAt: "2026-04-21T12:00:00.000Z",
@@ -308,7 +373,8 @@ test("buildSearchPlan uses only the custom term when no materials are selected",
     {
       key: "asa-filament",
       label: "ASA filament",
-      query: "ASA filament"
+      query: "ASA filament",
+      queries: ["ASA filament"]
     }
   ]);
 });
@@ -493,6 +559,16 @@ test("selectCheapestWithColorCoverage expands the shortlist when it uncovers new
 
   assert.equal(shortlisted.length, 4);
   assert.deepEqual(shortlisted.map((item) => item.shadeLabel), ["Black", "Gray", "Olive Green", "Dark Green"]);
+});
+
+test("selectCheapestWithColorCoverage keeps every result when limit is zero", () => {
+  const shortlisted = selectCheapestWithColorCoverage([
+    { title: "PLA C 1kg", priceValue: 3, totalValue: 3, pricePerKg: 3 },
+    { title: "PLA A 1kg", priceValue: 1, totalValue: 1, pricePerKg: 1 },
+    { title: "PLA B 1kg", priceValue: 2, totalValue: 2, pricePerKg: 2 }
+  ], 0);
+
+  assert.deepEqual(shortlisted.map((item) => item.title), ["PLA A 1kg", "PLA B 1kg", "PLA C 1kg"]);
 });
 
 test("mergeDiscountsIntoCheapestRange keeps cheap discounted items in the cheapest color-grouped list", () => {

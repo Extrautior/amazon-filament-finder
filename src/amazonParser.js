@@ -58,6 +58,29 @@ function hasExplicitPaidShippingSignal(...texts) {
   return texts.some((text) => /\$\s?\d+(?:\.\d{1,2})?\s+shipping|shipping\s+\$\s?\d+(?:\.\d{1,2})?/i.test(text || ""));
 }
 
+function parseShippingStatus(...texts) {
+  const text = cleanText(texts.filter(Boolean).join(" | "));
+  if (/cannot be shipped|does not ship|not available|currently unavailable/i.test(text)) {
+    return "not_shippable";
+  }
+  if (/\$\s?\d+(?:\.\d{1,2})?\s+shipping\s+to\s+Israel|shipping\s+\$\s?\d+(?:\.\d{1,2})?.{0,40}Israel/i.test(text)) {
+    return "paid_shipping";
+  }
+  if (/free\s+(?:delivery|shipping).{0,140}(?:eligible orders over|orders over|over\s+\$49).{0,80}Israel|free\s+(?:delivery|shipping).{0,140}Israel.{0,80}(?:eligible orders over|orders over|over\s+\$49)/i.test(text)) {
+    return "free_over_threshold_to_israel";
+  }
+  if (/free\s+(?:delivery|shipping).{0,160}Israel|Israel.{0,160}free\s+(?:delivery|shipping)/i.test(text)) {
+    return "free_to_israel";
+  }
+  if (hasExplicitFreeShippingSignal(text) && !hasExplicitPaidShippingSignal(text)) {
+    return "free_to_israel";
+  }
+  if (hasExplicitPaidShippingSignal(text)) {
+    return "paid_shipping";
+  }
+  return "unknown";
+}
+
 function parseDiscountPercent(text) {
   const normalized = cleanText(text);
   const match = normalized.match(/(?:save|extra)\s+(\d+)%|(\d+)%\s+off/i);
@@ -74,6 +97,10 @@ function hasDiscountSignal(text) {
 
 function materialMatches(material, title) {
   const normalizedTitle = cleanText(title).toUpperCase();
+  if (hasNonFilamentExclusion(normalizedTitle)) {
+    return false;
+  }
+
   const exact = new RegExp(`\\b${material}\\b`, "i");
   if (!exact.test(normalizedTitle)) {
     if (!(material === "PLA" && /\bPLA\+\b/i.test(normalizedTitle))) {
@@ -81,15 +108,17 @@ function materialMatches(material, title) {
     }
   }
 
-  if (!/\b(?:1\s?(?:KG|KILO|KILOGRAM)|2\.2\s?LBS?)\b/i.test(normalizedTitle)) {
+  const spoolInfo = parseSpoolInfo(normalizedTitle);
+  if (!spoolInfo) {
     return false;
   }
 
   const exclusions = {
-    PLA: ["PETG", "ABS", "TPU"],
-    PETG: ["PLA", "ABS", "TPU"],
-    ABS: ["PLA", "PETG", "TPU"],
-    TPU: ["PLA", "PETG", "ABS"]
+    PLA: ["PETG", "ABS", "TPU", "ASA"],
+    PETG: ["PLA", "ABS", "TPU", "ASA"],
+    ABS: ["PLA", "PETG", "TPU", "ASA"],
+    TPU: ["PLA", "PETG", "ABS", "ASA"],
+    ASA: ["PLA", "PETG", "ABS", "TPU"]
   };
 
   const excludedMaterials = exclusions[material] || [];
@@ -100,6 +129,53 @@ function materialMatches(material, title) {
     }
     return new RegExp(`\\b${other}\\b`, "i").test(normalizedTitle);
   });
+}
+
+function hasNonFilamentExclusion(title) {
+  return /\b(?:resin|sample|samples|dryer|dry\s+box|nozzle|nozzles|hotend|bed|build\s+plate|storage\s+bag|vacuum\s+bag|glue|adhesive|tube|tubing|connector|extruder|gear|part|parts|refill\s+only)\b/i.test(title);
+}
+
+function parseSpoolInfo(title) {
+  const text = cleanText(title).toUpperCase();
+  if (/\b(?:250\s?G|500\s?G|0\.25\s?KG|0\.5\s?KG|0\.25KG|0\.5KG)\b/i.test(text) && !/\b(?:1\s?KG|2\.2\s?LBS?)\b/i.test(text)) {
+    return null;
+  }
+
+  let packCount = 1;
+  let spoolKg = 1;
+  let totalKg = null;
+
+  const xPattern = text.match(/\b(\d{1,2})\s*(?:X|x|\*)\s*(?:1\s?KG|2\.2\s?LBS?)\b/i);
+  if (xPattern) {
+    packCount = Number(xPattern[1]);
+    totalKg = packCount;
+  }
+
+  const packPattern = text.match(/\b(\d{1,2})\s*[- ]?\s*(?:PACK|PK)\b|\bPACK\s+OF\s+(\d{1,2})\b/i);
+  if (packPattern && /\b(?:1\s?KG|2\.2\s?LBS?)\b/i.test(text)) {
+    packCount = Number(packPattern[1] || packPattern[2]);
+    totalKg = packCount;
+  }
+
+  const totalBundlePattern = text.match(/\b(\d{1,2})\s?KG\s+(?:BUNDLE|PACK|SET)\b|\b(?:BUNDLE|PACK|SET)\s+(?:OF\s+)?(\d{1,2})\s?KG\b/i);
+  if (!totalKg && totalBundlePattern) {
+    totalKg = Number(totalBundlePattern[1] || totalBundlePattern[2]);
+    packCount = totalKg;
+  }
+
+  if (!totalKg && /\b(?:1\s?KG|1\s?KILO|1\s?KILOGRAM|2\.2\s?LBS?)\b/i.test(text)) {
+    totalKg = 1;
+  }
+
+  if (!totalKg || totalKg < 1 || packCount < 1) {
+    return null;
+  }
+
+  return {
+    packCount,
+    spoolKg,
+    totalKg
+  };
 }
 
 function extractAsin(url) {
@@ -120,6 +196,9 @@ function compareCheapestResults(left, right) {
   const rightMissingPrice = right.priceValue == null ? 1 : 0;
   if (leftMissingPrice !== rightMissingPrice) {
     return leftMissingPrice - rightMissingPrice;
+  }
+  if (left.pricePerKg !== right.pricePerKg) {
+    return (left.pricePerKg ?? Number.POSITIVE_INFINITY) - (right.pricePerKg ?? Number.POSITIVE_INFINITY);
   }
   if (left.priceValue !== right.priceValue) {
     return (left.priceValue ?? Number.POSITIVE_INFINITY) - (right.priceValue ?? Number.POSITIVE_INFINITY);
@@ -149,7 +228,6 @@ function normalizeResult(material, raw, options = {}) {
   const explicitFreeShipping = hasExplicitFreeShippingSignal(shippingText, deliveryText, badgeText);
   const explicitPaidShipping = hasExplicitPaidShippingSignal(shippingText, deliveryText, badgeText);
   const thresholdFreeShipping = raw.thresholdFreeShipping === true;
-  const amazonFilteredEligible = freeShippingMode && options.filteredEligible === true;
   const minimumFreeShippingQuantity = Number.isFinite(Number(raw.minimumFreeShippingQuantity))
     ? Number(raw.minimumFreeShippingQuantity)
     : null;
@@ -157,7 +235,20 @@ function normalizeResult(material, raw, options = {}) {
     ? Number(raw.freeShippingSubtotal)
     : null;
   const quantityOneShipping = parsePrice(cleanText(raw.quantityOneShippingText || ""));
-  const freeShipping = (explicitFreeShipping && !explicitPaidShipping) || thresholdFreeShipping || amazonFilteredEligible;
+  const parsedShippingStatus = parseShippingStatus(shippingText, deliveryText, badgeText);
+  const amazonFilteredEligible =
+    freeShippingMode &&
+    options.filteredEligible === true &&
+    parsedShippingStatus !== "not_shippable";
+  const shippingStatus = thresholdFreeShipping
+    ? "free_over_threshold_to_israel"
+    : amazonFilteredEligible && parsedShippingStatus === "unknown"
+      ? "free_to_israel"
+      : parsedShippingStatus;
+  const freeShipping = (
+    ["free_to_israel", "free_over_threshold_to_israel"].includes(shippingStatus) ||
+    ((explicitFreeShipping && !explicitPaidShipping) || thresholdFreeShipping || amazonFilteredEligible)
+  );
   const freeShippingKind = thresholdFreeShipping
     ? "threshold"
     : explicitFreeShipping && !explicitPaidShipping
@@ -165,11 +256,15 @@ function normalizeResult(material, raw, options = {}) {
       : amazonFilteredEligible
         ? "amazon-filter"
         : "none";
-  const blockedShipping = /cannot be shipped|unavailable|does not ship|not available|currently unavailable/i.test(
+  const blockedShipping = /cannot be shipped|does not ship|not available|currently unavailable/i.test(
     availabilityNote
   );
   const explicitIsraelSignal = /Israel/i.test(availabilityNote);
-  const shipsToIsrael = !blockedShipping && (explicitIsraelSignal || destinationConfirmed || freeShippingMode);
+  const shipsToIsrael = !blockedShipping && (
+    explicitIsraelSignal ||
+    destinationConfirmed ||
+    ["free_to_israel", "free_over_threshold_to_israel", "paid_shipping"].includes(shippingStatus)
+  );
 
   const shippingValue = freeShipping ? 0 : shipping ? shipping.value : null;
   const basePriceValue = thresholdFreeShipping && freeShippingSubtotal != null
@@ -178,6 +273,10 @@ function normalizeResult(material, raw, options = {}) {
       ? productPrice.value
       : 0;
   const totalValue = computeTotal(basePriceValue, shippingValue, importFees ? importFees.value : null);
+  const spoolInfo = parseSpoolInfo(title) || { packCount: 1, spoolKg: 1, totalKg: 1 };
+  const pricePerKg = productPrice && spoolInfo.totalKg
+    ? totalValue / spoolInfo.totalKg
+    : null;
 
   return {
     material,
@@ -193,9 +292,14 @@ function normalizeResult(material, raw, options = {}) {
     shippingValue,
     importFeesValue: importFees ? importFees.value : null,
     totalValue,
+    packCount: spoolInfo.packCount,
+    spoolKg: spoolInfo.spoolKg,
+    totalKg: spoolInfo.totalKg,
+    pricePerKg,
     currency: productPrice ? productPrice.currency : shipping ? shipping.currency : importFees ? importFees.currency : "$",
     shipsToIsrael,
     freeShipping,
+    shippingStatus,
     freeShippingKind,
     minimumFreeShippingQuantity,
     freeShippingSubtotal,
@@ -225,6 +329,9 @@ function dedupeAndSort(results) {
 
 function selectCheapestWithColorCoverage(results, limit = RESULT_LIMIT, extraCoverageLimit = 12) {
   const sortedResults = [...results].sort(compareCheapestResults);
+  if (!limit || limit <= 0) {
+    return sortedResults;
+  }
   if (sortedResults.length <= limit) {
     return sortedResults;
   }
@@ -303,7 +410,7 @@ function dedupeAndSortDiscounted(results) {
     }
   }
 
-  return [...deduped.values()]
+  const sorted = [...deduped.values()]
     .sort((a, b) => {
       const percentDelta = (b.discountPercent ?? -1) - (a.discountPercent ?? -1);
       if (percentDelta !== 0) {
@@ -318,8 +425,9 @@ function dedupeAndSortDiscounted(results) {
         return (a.priceValue ?? Number.POSITIVE_INFINITY) - (b.priceValue ?? Number.POSITIVE_INFINITY);
       }
       return a.title.localeCompare(b.title);
-    })
-    .slice(0, RESULT_LIMIT);
+    });
+
+  return RESULT_LIMIT > 0 ? sorted.slice(0, RESULT_LIMIT) : sorted;
 }
 
 function normalizeMaterialResults(material, rawResults, options = {}) {
@@ -348,6 +456,8 @@ module.exports = {
   mergeDiscountsIntoCheapestRange,
   normalizeMaterialResults,
   parseDiscountPercent,
+  parseShippingStatus,
+  parseSpoolInfo,
   parsePrice,
   selectCheapestWithColorCoverage
 };

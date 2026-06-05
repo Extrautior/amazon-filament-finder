@@ -1,18 +1,16 @@
 # Amazon Filament Finder
 
-Hosted web app that searches `Amazon.com` for `PLA`, `PETG`, `ABS`, and `TPU` filament listings that appear eligible to ship to Israel and sorts them by total delivered cost.
+Hosted web app that searches `Amazon.com` for `PLA`, `PETG`, `ABS`, `TPU`, and `ASA` filament listings that appear eligible to ship to Israel and sorts them by effective delivered cost per kilogram.
 
-This version keeps the same scraping logic as the original local tool:
+This version uses a hybrid scraping flow:
 
-- search `PLA`, `PETG`, `ABS`, `TPU`
-- `1kg` and `2.2lbs` listings only
-- Amazon low-to-high sorting
-- Amazon's own `Eligible for Free Shipping` search filter
-- product-page quantity checks for listings that become free-shipping eligible only after the order subtotal crosses Amazon's threshold
-- strict material matching
-- images, export, and direct product links
+- Decodo fetches broad filtered Amazon search pages with the Amazon free-shipping filter and Israel geo.
+- The existing Playwright/Chromium flow is kept only for optional product-page verification and legacy fallback.
+- Results include normal 1kg spools and bundles of full 1kg spools, then sort by price per kg.
+- Product-page verification can check listings that become free-shipping eligible only after the order subtotal crosses Amazon's threshold.
+- Images, color grouping, export, direct product links, history, auto-refresh, and Discord deal alerts remain in place.
 
-The big runtime change is that the app now uses one persistent server-side Playwright/Chromium profile instead of copying a local Brave profile.
+The big runtime change is that scheduled discovery no longer depends on a persistent Amazon browser session. Chromium is still useful for optional verification and emergency browser fallback.
 
 ## Hosted behavior
 
@@ -33,9 +31,16 @@ Copy `.env.example` into your preferred service env file and set:
 - `DATA_DIR`
 - `AMAZON_SESSION_DIR`
 - `PORT`
-- `RESULT_LIMIT`
+- `RESULT_LIMIT` (`0` means keep every result found)
 - `SEARCH_TIMEOUT_MS`
 - `PRODUCT_PAGE_VERIFY_LIMIT`
+- `SEARCH_PROVIDER` (`hybrid` by default, or `browser` for the legacy full-browser scraper)
+- `DECODO_AUTH_TOKEN`
+- `DECODO_GEO`
+- `DECODO_MAX_REQUESTS_PER_RUN`
+- `BROWSER_VERIFY_LIMIT_SCHEDULED`
+- `BROWSER_VERIFY_LIMIT_MANUAL`
+- `ENABLE_LEGACY_BROWSER_SEARCH`
 - `AUTO_REFRESH_ENABLED`
 - `AUTO_REFRESH_TIMEZONE`
 - `AUTO_REFRESH_HOURS`
@@ -44,13 +49,13 @@ Copy `.env.example` into your preferred service env file and set:
 - `DEAL_NOTIFICATION_RETENTION_DAYS`
 - `DEAL_NOTIFICATION_MAX_ITEMS`
 
-Optional:
+Optional browser verification/fallback:
 
 - `HEADLESS=false` while doing first-time session setup
 - `BROWSER_EXECUTABLE_PATH` if Chromium is not on `PATH`
 - `BROWSER_ARGS=--no-sandbox --disable-setuid-sandbox` if your LXC needs those Chromium flags
 
-By default, the hosted server can automatically run the same search as `Search All` twice per day at `08:00` and `20:00` in `Asia/Jerusalem`. Change `AUTO_REFRESH_HOURS` or disable it with `AUTO_REFRESH_ENABLED=false` if you want a different schedule.
+By default, the hosted server can automatically run the same search as `Search All` twice per day at `08:00` and `20:00` in `Asia/Jerusalem`. Change `AUTO_REFRESH_HOURS` or disable it with `AUTO_REFRESH_ENABLED=false` if you want a different schedule. `RESULT_LIMIT=0` keeps every normalized result found. `DECODO_MAX_REQUESTS_PER_RUN` is the real crawl budget; raise it to let the app walk more filtered Amazon pages, or lower it to control Decodo cost.
 
 If you want Discord deal alerts, set `DEAL_NOTIFICATIONS_ENABLED=true` and provide `DISCORD_WEBHOOK_URL`. The server compares each successful run with the previous snapshot, keeps a persistent notified-history, and sends one summary message only for genuinely new cheapest or discounted deals that have not already been announced recently.
 
@@ -72,9 +77,9 @@ If you want Discord deal alerts, set `DEAL_NOTIFICATIONS_ENABLED=true` and provi
 
 4. Open `http://localhost:3017`.
 
-## First-time Amazon session setup
+## Optional Amazon session setup
 
-The hosted app depends on one shared Amazon browser session stored in `AMAZON_SESSION_DIR`.
+Hybrid searches use Decodo for broad discovery. A shared Amazon browser session stored in `AMAZON_SESSION_DIR` is only needed if you want browser verification or `SEARCH_PROVIDER=browser`.
 
 1. Temporarily run the session setup flow with a visible browser:
 
@@ -96,7 +101,7 @@ The hosted app depends on one shared Amazon browser session stored in `AMAZON_SE
    npm run session:status
    ```
 
-If Amazon expires the session later, the hosted API returns a clear reauthentication error instead of empty broken results.
+If Amazon expires the session later, hybrid searches still run, but browser verification is skipped with a warning.
 
 If a setup browser window or a stale Chromium lock file temporarily keeps the shared browser profile busy, the app now retries safely and returns a short "session is busy" message instead of dumping the raw Chromium launch trace.
 

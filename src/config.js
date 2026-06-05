@@ -2,19 +2,25 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-const MATERIALS = ["PLA", "PETG", "ABS", "TPU"];
+const MATERIALS = ["PLA", "PETG", "ABS", "TPU", "ASA"];
 const DEFAULT_MARKETPLACE = "amazon.com";
 const SEARCH_BASE_URL = "https://www.amazon.com/s";
 const SEARCH_TERMS = {
-  PLA: "PLA filament",
-  PETG: "PETG filament",
-  ABS: "ABS filament",
-  TPU: "TPU filament"
+  PLA: "PLA filament 1kg",
+  PETG: "PETG filament 1kg",
+  ABS: "ABS filament 1kg",
+  TPU: "TPU filament 1kg",
+  ASA: "ASA filament 1kg"
 };
 
 function numberFromEnv(name, fallback) {
   const value = Number(process.env[name]);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function nonNegativeNumberFromEnv(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 function boolFromEnv(name, fallback) {
@@ -72,12 +78,19 @@ module.exports = {
   SEARCH_TERMS,
   APP_PASSWORD: process.env.APP_PASSWORD || "",
   PORT: numberFromEnv("PORT", 3017),
-  RESULT_LIMIT: numberFromEnv("RESULT_LIMIT", 20),
+  RESULT_LIMIT: nonNegativeNumberFromEnv("RESULT_LIMIT", 0),
   DEFAULT_TIMEOUT_MS: numberFromEnv("SEARCH_TIMEOUT_MS", 30000),
   PRODUCT_PAGE_VERIFY_LIMIT: numberFromEnv("PRODUCT_PAGE_VERIFY_LIMIT", 24),
   DATA_DIR,
   AMAZON_SESSION_DIR,
   LOG_DIR,
+  SEARCH_PROVIDER: stringFromEnv("SEARCH_PROVIDER", "hybrid").toLowerCase(),
+  DECODO_AUTH_TOKEN: stringFromEnv("DECODO_AUTH_TOKEN", ""),
+  DECODO_GEO: stringFromEnv("DECODO_GEO", "Israel"),
+  DECODO_MAX_REQUESTS_PER_RUN: numberFromEnv("DECODO_MAX_REQUESTS_PER_RUN", 20),
+  BROWSER_VERIFY_LIMIT_SCHEDULED: numberFromEnv("BROWSER_VERIFY_LIMIT_SCHEDULED", 5),
+  BROWSER_VERIFY_LIMIT_MANUAL: numberFromEnv("BROWSER_VERIFY_LIMIT_MANUAL", 25),
+  ENABLE_LEGACY_BROWSER_SEARCH: boolFromEnv("ENABLE_LEGACY_BROWSER_SEARCH", false),
   HEADLESS: boolFromEnv("HEADLESS", true),
   AUTO_REFRESH_ENABLED: boolFromEnv("AUTO_REFRESH_ENABLED", true),
   AUTO_REFRESH_TIMEZONE: process.env.AUTO_REFRESH_TIMEZONE || "Asia/Jerusalem",

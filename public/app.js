@@ -348,6 +348,9 @@ function compareResultPrices(left, right) {
   if (leftMissingPrice !== rightMissingPrice) {
     return leftMissingPrice - rightMissingPrice;
   }
+  if (left.pricePerKg !== right.pricePerKg) {
+    return (left.pricePerKg ?? Number.POSITIVE_INFINITY) - (right.pricePerKg ?? Number.POSITIVE_INFINITY);
+  }
   if (left.priceValue !== right.priceValue) {
     return (left.priceValue ?? Number.POSITIVE_INFINITY) - (right.priceValue ?? Number.POSITIVE_INFINITY);
   }
@@ -521,7 +524,16 @@ function cardForResult(item, index) {
           <dt>Total</dt>
           <dd>${money(item.totalValue, item.currency)}</dd>
         </div>
+        <div>
+          <dt>$/kg</dt>
+          <dd>${money(item.pricePerKg, item.currency)}</dd>
+        </div>
+        <div>
+          <dt>Spools</dt>
+          <dd>${escapeHtml(item.packCount || 1)} x ${escapeHtml(item.spoolKg || 1)}kg</dd>
+        </div>
       </dl>
+      <p class="result-note">${escapeHtml(item.shippingStatus || "unknown")}</p>
       <a class="open-link" href="${escapeHtml(amazonUrl)}" target="_blank" rel="noreferrer">Open on Amazon</a>
     </article>
   `;
@@ -1067,7 +1079,7 @@ loginForm.addEventListener("submit", async (event) => {
 });
 
 button.addEventListener("click", () => {
-  void startSearch({ materials: ["PLA", "PETG", "ABS", "TPU"] });
+  void startSearch({ materials: ["PLA", "PETG", "ABS", "TPU", "ASA"] });
 });
 
 for (const materialButton of materialButtons) {
