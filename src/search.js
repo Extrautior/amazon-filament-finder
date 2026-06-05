@@ -656,9 +656,20 @@ async function collectSearchPageItems(page) {
         };
         const titleEl = card.querySelector("h2 span");
         const linkEl = card.querySelector("h2 a");
+        const h2El = card.querySelector("h2");
+        const imageEl = card.querySelector("img.s-image");
+        const cleanCardText = (value) => String(value || "").replace(/\s+/g, " ").trim();
+        const titleCandidates = [
+          linkEl ? linkEl.getAttribute("aria-label") : "",
+          titleEl ? titleEl.textContent : "",
+          h2El ? h2El.textContent : "",
+          imageEl ? imageEl.getAttribute("alt") : ""
+        ]
+          .map(cleanCardText)
+          .filter(Boolean)
+          .sort((left, right) => right.length - left.length);
         const href = linkEl ? linkEl.href || linkEl.getAttribute("href") : null;
         const asin = card.getAttribute("data-asin") || extractAsinFromHref(href);
-        const imageEl = card.querySelector("img.s-image");
         const priceCandidates = [...card.querySelectorAll(".a-price")]
           .map((priceNode) => {
             const offscreen = priceNode.querySelector(".a-offscreen");
@@ -701,7 +712,7 @@ async function collectSearchPageItems(page) {
 
         return {
           asin,
-          title: titleEl ? titleEl.textContent : "",
+          title: titleCandidates[0] || "",
           url: href,
           imageUrl: imageEl ? imageEl.getAttribute("src") || imageEl.getAttribute("data-src") || "" : "",
           priceText,
