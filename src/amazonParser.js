@@ -163,6 +163,19 @@ function parseSpoolInfo(title) {
     packCount = totalKg;
   }
 
+  const genericTotalKgPattern = text.match(/\b(1|2|3|4|5|6|8|10|12|16|20)\s?KG\b/i);
+  if (!totalKg && genericTotalKgPattern) {
+    totalKg = Number(genericTotalKgPattern[1]);
+    packCount = totalKg;
+  }
+
+  const genericTotalLbPattern = text.match(/\b(2\.2|4\.4|6\.6|8\.8|11|13\.2|17\.6|22|26\.4|35\.2|44)\s?LBS?\b/i);
+  if (!totalKg && genericTotalLbPattern) {
+    const pounds = Number(genericTotalLbPattern[1]);
+    totalKg = Math.round((pounds / 2.2) * 10) / 10;
+    packCount = Math.max(1, Math.round(totalKg));
+  }
+
   if (!totalKg && /\b(?:1\s?KG|1\s?KILO|1\s?KILOGRAM|2\.2\s?LBS?)\b/i.test(text)) {
     totalKg = 1;
   }

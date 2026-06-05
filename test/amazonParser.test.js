@@ -228,6 +228,7 @@ test("materialMatches requires a 1kg-style spool size", () => {
   assert.equal(materialMatches("PLA", "PLA Filament 1kg Spool 1.75mm"), true);
   assert.equal(materialMatches("PLA", "PLA Filament 250g Sample Pack"), false);
   assert.equal(materialMatches("PLA", "PLA+ Filament 2.2lbs Spool"), true);
+  assert.equal(materialMatches("PETG", "Comgrow PETG 3D Printer Filament 2kg (4.4LBS) Black+Black"), true);
 });
 
 test("parseSpoolInfo accepts full 1kg spool bundles", () => {
@@ -245,6 +246,11 @@ test("parseSpoolInfo accepts full 1kg spool bundles", () => {
     packCount: 10,
     spoolKg: 1,
     totalKg: 10
+  });
+  assert.deepEqual(parseSpoolInfo("Comgrow PETG 3D Printer Filament 2kg (4.4LBS) Black+Black"), {
+    packCount: 2,
+    spoolKg: 1,
+    totalKg: 2
   });
 });
 
@@ -383,12 +389,12 @@ test("buildSearchPlan uses only the custom term when no materials are selected",
 test("buildSearchPlan includes bundle query seeds for material searches", () => {
   const [plan] = buildSearchPlan({ materials: ["PLA"] });
 
-  assert.deepEqual(plan.queries, [
-    "PLA filament 1kg",
-    "PLA 3d printer filament 1kg",
-    "PLA 2 pack filament 1kg",
-    "PLA filament bundle 1kg"
-  ]);
+  assert.ok(plan.queries.includes("PLA filament 1kg"));
+  assert.ok(plan.queries.includes("PLA filament 2kg"));
+  assert.ok(plan.queries.includes("PLA filament 4.4lbs"));
+  assert.ok(plan.queries.includes("PLA multipack filament"));
+  assert.ok(plan.queries.includes("Comgrow PLA filament"));
+  assert.ok(plan.queries.includes("PLA filament bundle 1kg"));
 });
 
 test("buildSearchUrl uses Amazon free-shipping filter and price sort", () => {
