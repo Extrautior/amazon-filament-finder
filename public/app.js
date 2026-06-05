@@ -653,6 +653,33 @@ function renderWarnings(warnings) {
   `;
 }
 
+function clearCurrentResultsForSearch(searchRequest = {}) {
+  selectedHistoryJobId = null;
+  renderWarnings([]);
+  metaEl.hidden = true;
+  searchedAtEl.textContent = "";
+  marketplaceEl.textContent = "";
+  cheapestCountEl.textContent = "0";
+  discountCountEl.textContent = "0";
+  const labels = Array.isArray(searchRequest.materials) && searchRequest.materials.length
+    ? searchRequest.materials
+    : searchRequest.customTerm
+      ? [searchRequest.customTerm]
+      : ["PLA", "PETG", "ABS", "TPU", "ASA"];
+  resultsEl.innerHTML = `
+    <article class="material-card is-active">
+      <div class="material-header">
+        <h2>Current Search Running</h2>
+        <span>${labels.map(escapeHtml).join(", ")}</span>
+      </div>
+      <p class="empty">Collecting fresh Amazon pages. Previous warnings are hidden until this job finishes.</p>
+    </article>
+  `;
+  currentResultIndex = 0;
+  syncResultsCarousel();
+  setExportEnabled(false);
+}
+
 function resultSlideLabel(card, index) {
   const title = card.querySelector(".material-header h2")?.textContent?.trim();
   return title || `Group ${index + 1}`;
@@ -1025,6 +1052,7 @@ function startSearchProgressPolling() {
 async function startSearch(searchRequest) {
   setLockedState(true);
   setExportEnabled(false);
+  clearCurrentResultsForSearch(searchRequest);
   statusEl.textContent = "Searching Amazon. The shared browser session in the container is collecting prices now.";
   renderSearchProgress({
     percent: 1,
