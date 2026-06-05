@@ -49,6 +49,7 @@ BROWSER_MAX_RAW_RESULT_ITEMS=1000
 BROWSER_MAX_QUERIES_PER_MATERIAL=8
 BROWSER_SINGLE_MATERIAL_MAX_QUERIES=0
 BROWSER_RESULT_SELECTOR_TIMEOUT_MS=12000
+BROWSER_SEARCH_CONCURRENCY=4
 ENABLE_LEGACY_BROWSER_SEARCH=false
 AUTO_REFRESH_ENABLED=true
 AUTO_REFRESH_TIMEZONE=Asia/Jerusalem
@@ -69,6 +70,7 @@ Notes:
 - `BROWSER_MAX_RAW_RESULT_ITEMS=1000` prevents one bad search from growing forever.
 - `BROWSER_MAX_QUERIES_PER_MATERIAL=8` keeps Search All balanced instead of crawling every brand seed for every material.
 - `BROWSER_RESULT_SELECTOR_TIMEOUT_MS=12000` skips bad/blocked pages faster than the old 30-second wait.
+- `BROWSER_SEARCH_CONCURRENCY=4` runs up to four browser pages/tabs at once.
 - If Amazon starts blocking or the LXC is too slow, lower `BROWSER_MAX_SEARCH_RESULT_PAGES` to `5`.
 - Optional Decodo mode still exists. If you use it later, set `SEARCH_PROVIDER=hybrid` and add `DECODO_AUTH_TOKEN`.
 

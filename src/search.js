@@ -18,6 +18,7 @@ const {
   BROWSER_MAX_QUERIES_PER_MATERIAL,
   BROWSER_SINGLE_MATERIAL_MAX_QUERIES,
   BROWSER_RESULT_SELECTOR_TIMEOUT_MS,
+  BROWSER_SEARCH_CONCURRENCY,
   HEADLESS,
   BROWSER_CHANNEL,
   BROWSER_EXECUTABLE_PATH,
@@ -871,9 +872,18 @@ async function searchMaterial(context, searchTarget, options = {}) {
   }
 
   const rawItems = [];
-  for (const query of queries) {
-    rawItems.push(...await collectBrowserSearchQuery(context, searchTarget, query, warnings));
+  let nextQueryIndex = 0;
+  const workerCount = Math.max(1, Math.min(BROWSER_SEARCH_CONCURRENCY, queries.length));
+
+  async function runWorker() {
+    while (nextQueryIndex < queries.length) {
+      const query = queries[nextQueryIndex];
+      nextQueryIndex += 1;
+      rawItems.push(...await collectBrowserSearchQuery(context, searchTarget, query, warnings));
+    }
   }
+
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
 
   try {
     const dedupedRawItems = dedupeRawItems(rawItems);
