@@ -522,45 +522,43 @@ function cardForResult(item, index) {
   const colorProfile = detectColorProfile(item);
   const isBundle = isBundleItem(item);
   return `
-    <article class="result-card${isBundle ? " bundle-card" : ""}" data-shade-label="${escapeHtml(colorProfile.shadeLabel)}">
-      <div class="result-top">
-        <span class="result-rank">#${index + 1}</span>
-        <span class="pill pill-free">${escapeHtml(freeShippingLabel(item))}</span>
-        ${isBundle ? `<span class="pill pill-bundle">Bundle</span>` : ""}
-        ${colorProfile.shadeLabel !== colorProfile.colorLabel ? `<span class="pill pill-shade">${escapeHtml(colorProfile.shadeLabel)}</span>` : ""}
-        ${item.hasDiscount ? `<span class="pill pill-deal">${escapeHtml(item.discountPercent != null ? `Save ${item.discountPercent}%` : "Discount")}</span>` : ""}
+    <article class="product-card${isBundle ? " bundle-card" : ""}" data-shade-label="${escapeHtml(colorProfile.shadeLabel)}">
+      <div class="product-media">
+        ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" />` : `<span class="material-symbols-outlined" aria-hidden="true">deployed_code</span>`}
+        <div class="product-badges">
+          <span>${escapeHtml(freeShippingLabel(item))}</span>
+          ${isBundle ? `<span>Bundle</span>` : ""}
+          ${item.hasDiscount ? `<span>${escapeHtml(item.discountPercent != null ? `Save ${item.discountPercent}%` : "Deal")}</span>` : ""}
+        </div>
       </div>
-      ${imageUrl ? `<div class="result-image-wrap"><img class="result-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" /></div>` : ""}
-      <h3><a href="${escapeHtml(amazonUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a></h3>
-      ${thresholdNote(item) ? `<p class="result-note">${escapeHtml(thresholdNote(item))}</p>` : ""}
-      <dl class="result-metrics">
-        <div>
-          <dt>Item</dt>
-          <dd>${money(item.priceValue, item.currency)}</dd>
+      <div class="product-body">
+        <div class="product-title-row">
+          <h3><a href="${escapeHtml(amazonUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a></h3>
+          <span class="result-rank">#${index + 1}</span>
         </div>
-        <div>
-          <dt>Shipping</dt>
-          <dd>${money(item.shippingValue, item.currency)}</dd>
+        <div class="product-color">
+          <span class="color-dot" data-color-key="${escapeHtml(colorProfile.colorKey)}"></span>
+          <span>${escapeHtml(colorProfile.shadeLabel)}</span>
         </div>
-        <div>
-          <dt>Import</dt>
-          <dd>${money(item.importFeesValue, item.currency)}</dd>
+        ${thresholdNote(item) ? `<p class="result-note">${escapeHtml(thresholdNote(item))}</p>` : ""}
+        <div class="product-price-row">
+          <div>
+            <strong>${money(item.pricePerKg, item.currency)}</strong>
+            <span>per kg</span>
+          </div>
+          <div>
+            <strong>${money(item.totalValue, item.currency)}</strong>
+            <span>delivered</span>
+          </div>
         </div>
-        <div>
-          <dt>Total</dt>
-          <dd>${money(item.totalValue, item.currency)}</dd>
-        </div>
-        <div>
-          <dt>$/kg</dt>
-          <dd>${money(item.pricePerKg, item.currency)}</dd>
-        </div>
-        <div>
-          <dt>Spools</dt>
-          <dd>${escapeHtml(item.packCount || 1)} x ${escapeHtml(item.spoolKg || 1)}kg</dd>
-        </div>
-      </dl>
-      <p class="result-note">${escapeHtml(item.shippingStatus || "unknown")}</p>
-      <a class="open-link" href="${escapeHtml(amazonUrl)}" target="_blank" rel="noreferrer">Open on Amazon</a>
+        <dl class="product-facts">
+          <div><dt>Item</dt><dd>${money(item.priceValue, item.currency)}</dd></div>
+          <div><dt>Shipping</dt><dd>${money(item.shippingValue, item.currency)}</dd></div>
+          <div><dt>Import</dt><dd>${money(item.importFeesValue, item.currency)}</dd></div>
+          <div><dt>Spools</dt><dd>${escapeHtml(item.packCount || 1)} x ${escapeHtml(item.spoolKg || 1)}kg</dd></div>
+        </dl>
+        <a class="open-link" href="${escapeHtml(amazonUrl)}" target="_blank" rel="noreferrer">Open on Amazon</a>
+      </div>
     </article>
   `;
 }
@@ -574,76 +572,46 @@ function sectionTitleLabel(section, suffix) {
   return `${section.label} ${suffix}`;
 }
 
-function sectionForMaterial(section, items) {
+function resultFeedHeader(section, items, title, kicker) {
   const colorGroups = groupItemsByColor(items);
+  return `
+    <div class="feed-header">
+      <div>
+        <span class="section-kicker">${escapeHtml(kicker)}</span>
+        <h2>${escapeHtml(title)}</h2>
+        <p>${items.length} result${items.length === 1 ? "" : "s"} across ${colorGroups.length} color group${colorGroups.length === 1 ? "" : "s"}</p>
+      </div>
+      <label class="feed-sort">
+        <span>Sort by</span>
+        <select>
+          <option>Price: Low to High</option>
+          <option>Price: High to Low</option>
+        </select>
+      </label>
+    </div>
+    ${colorGroups.length ? `
+      <div class="color-chip-row" aria-label="Color groups">
+        ${colorGroups.map((colorGroup) => `
+          <button class="color-chip" type="button">
+            <span class="color-dot" data-color-key="${escapeHtml(slugify(colorGroup.label))}"></span>
+            ${escapeHtml(colorGroup.label)}
+            <strong>${colorGroup.items.length}</strong>
+          </button>
+        `).join("")}
+      </div>
+    ` : ""}
+  `;
+}
+
+function sectionForMaterial(section, items) {
   const cards = items.length
-    ? colorGroups.map((colorGroup) => {
-        const colorGroupId = `${slugify(section.key || section.label)}-${slugify(colorGroup.label)}`;
-        const shadeFilterId = `${colorGroupId}-shade-filter`;
-        const visibleShadeOptions = colorGroup.shades.filter((shadeGroup) => shadeGroup.label !== colorGroup.label);
-        return `
-        <section class="color-group">
-          <div id="${escapeHtml(colorGroupId)}" class="color-group-anchor" aria-hidden="true"></div>
-          <div class="color-group-header">
-            <div class="color-group-title-wrap">
-              <h3>${escapeHtml(colorGroup.label)}</h3>
-              ${visibleShadeOptions.length ? `
-                <label class="shade-select-wrap" for="${escapeHtml(shadeFilterId)}">
-                  <span>Shade</span>
-                  <select id="${escapeHtml(shadeFilterId)}" class="shade-select" data-shade-filter="${escapeHtml(colorGroupId)}">
-                    <option value="all">All shades</option>
-                    ${colorGroup.shades.map((shadeGroup) => `
-                      <option value="${escapeHtml(shadeGroup.label)}">
-                        ${escapeHtml(shadeGroup.label)} (${shadeGroup.items.length})
-                      </option>
-                    `).join("")}
-                  </select>
-                </label>
-              ` : ""}
-            </div>
-            <span class="color-group-count" data-color-count="${escapeHtml(colorGroupId)}">${colorGroup.items.length} result${colorGroup.items.length === 1 ? "" : "s"}</span>
-          </div>
-          <div class="${gridClassName(colorGroup.items.length, "color-result-grid")}">
-            ${colorGroup.items.map((item, index) => cardForResult(item, index)).join("")}
-          </div>
-        </section>
-      `;
-      }).join("")
+    ? `<div class="${gridClassName(items.length)}">${items.map((item, index) => cardForResult(item, index)).join("")}</div>`
     : `<p class="empty">No free-shipping ${escapeHtml(section.label)} results found.</p>`;
 
-  const colorJumpNav = colorGroups.length
-    ? `
-      <aside class="color-jump-nav">
-        <span class="color-jump-label">Jump to color</span>
-        <div class="color-jump-actions">
-          ${colorGroups.map((colorGroup) => {
-            const colorGroupId = `${slugify(section.key || section.label)}-${slugify(colorGroup.label)}`;
-            return `
-              <button class="color-jump-button" type="button" data-color-target="${escapeHtml(colorGroupId)}">
-                ${escapeHtml(colorGroup.label)}
-              </button>
-            `;
-          }).join("")}
-        </div>
-      </aside>
-    `
-    : "";
-
   return `
-    <article class="material-card result-panel" data-result-material="${escapeHtml(section.key || section.label)}" data-result-group="cheapest">
-      <div class="material-header">
-        <div>
-          <span class="section-kicker">Cheapest by color</span>
-          <h2>${escapeHtml(sectionTitleLabel(section, "Cheapest Results"))}</h2>
-        </div>
-        <span>${items.length} result${items.length === 1 ? "" : "s"} across ${colorGroups.length} color group${colorGroups.length === 1 ? "" : "s"}</span>
-      </div>
-      <div class="material-layout${colorGroups.length ? " has-color-sidebar" : ""}">
-        ${colorJumpNav}
-        <div class="color-groups">
-        ${cards}
-        </div>
-      </div>
+    <article class="result-panel" data-result-material="${escapeHtml(section.key || section.label)}" data-result-group="cheapest">
+      ${resultFeedHeader(section, items, "Available Filaments", "Cheapest by delivered price")}
+      ${cards}
     </article>
   `;
 }
@@ -654,46 +622,29 @@ function bundleSectionForMaterial(section, items) {
     .slice()
     .sort(compareResultPrices);
   const cards = bundleItems.length
-    ? bundleItems.map((item, index) => cardForResult(item, index)).join("")
+    ? `<div class="${gridClassName(bundleItems.length, "bundle-grid")}">${bundleItems.map((item, index) => cardForResult(item, index)).join("")}</div>`
     : `<p class="empty">No full-spool ${escapeHtml(section.label)} bundles found in this run.</p>`;
 
   return `
-    <article class="material-card result-panel bundle-section" data-result-material="${escapeHtml(section.key || section.label)}" data-result-group="bundles">
-      <div class="material-header">
-        <div>
-          <span class="section-kicker">Full spool multipacks</span>
-          <h2>${escapeHtml(sectionTitleLabel(section, "Bundles"))}</h2>
-        </div>
-        <span>${bundleItems.length} bundle${bundleItems.length === 1 ? "" : "s"}</span>
-      </div>
-      <div class="${gridClassName(bundleItems.length, "bundle-grid")}">
-        ${cards}
-      </div>
+    <article class="result-panel" data-result-material="${escapeHtml(section.key || section.label)}" data-result-group="bundles">
+      ${resultFeedHeader(section, bundleItems, `${section.label} Bundles`, "Full spool multipacks")}
+      ${cards}
     </article>
   `;
 }
 
 function discountSectionForMaterial(section, items) {
   const cards = items.length
-    ? items.map((item, index) => cardForResult(item, index)).join("")
+    ? `<div class="${gridClassName(items.length)}">${items.map((item, index) => cardForResult(item, index)).join("")}</div>`
     : `<p class="empty">No discounted ${escapeHtml(section.label)} deals found.</p>`;
 
   return `
-    <article class="material-card result-panel" data-result-material="${escapeHtml(section.key || section.label)}" data-result-group="discounts">
-      <div class="material-header">
-        <div>
-          <span class="section-kicker">Discount signals</span>
-          <h2>${escapeHtml(sectionTitleLabel(section, "Discounted Deals"))}</h2>
-        </div>
-        <span>${items.length} result${items.length === 1 ? "" : "s"}</span>
-      </div>
-      <div class="${gridClassName(items.length)}">
-        ${cards}
-      </div>
+    <article class="result-panel" data-result-material="${escapeHtml(section.key || section.label)}" data-result-group="discounts">
+      ${resultFeedHeader(section, items, `${section.label} Discounted Deals`, "Discount signals")}
+      ${cards}
     </article>
   `;
 }
-
 function renderWarnings(warnings) {
   const visibleWarnings = (warnings || []).filter(
     (warning) => !/did not preserve the free-shipping filter/i.test(String(warning || ""))
