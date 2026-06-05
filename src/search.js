@@ -879,13 +879,18 @@ async function searchMaterial(context, searchTarget, options = {}) {
 
   const rawItems = [];
   let nextQueryIndex = 0;
-  const workerCount = Math.max(1, Math.min(BROWSER_SEARCH_CONCURRENCY, queries.length));
+  const requestedConcurrency = Number.isFinite(Number(options.concurrency)) ? Number(options.concurrency) : BROWSER_SEARCH_CONCURRENCY;
+  const workerCount = Math.max(1, Math.min(requestedConcurrency, queries.length));
 
   async function runWorker() {
     while (nextQueryIndex < queries.length) {
       const query = queries[nextQueryIndex];
       nextQueryIndex += 1;
-      rawItems.push(...await collectBrowserSearchQuery(context, searchTarget, query, warnings));
+      try {
+        rawItems.push(...await collectBrowserSearchQuery(context, searchTarget, query, warnings));
+      } catch (error) {
+        warnings.push(`Skipped "${query}": ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   }
 
@@ -927,6 +932,24 @@ function emitProgress(onProgress, update) {
       timestamp: new Date().toISOString(),
       ...update
     });
+  }
+}
+
+function isBrowserClosedError(error) {
+  return /Target page, context or browser has been closed|browserContext\.newPage|Browser closed|Context closed/i.test(
+    error instanceof Error ? error.message : String(error)
+  );
+}
+
+async function searchMaterialWithFreshContext(searchTarget, options = {}) {
+  let materialContext;
+  try {
+    materialContext = await launchSessionContext();
+    return await searchMaterial(materialContext, searchTarget, options);
+  } finally {
+    if (materialContext) {
+      await materialContext.close().catch(() => {});
+    }
   }
 }
 
@@ -972,12 +995,22 @@ async function runBrowserSearch(options = {}) {
         message: `Searching ${searchTarget.label} listings on Amazon.`
       });
 
-      let materialContext;
       try {
-        materialContext = await launchSessionContext();
-        const materialResults = await searchMaterial(materialContext, searchTarget, {
-          maxQueries: maxQueriesPerMaterial
-        });
+        let materialResults;
+        try {
+          materialResults = await searchMaterialWithFreshContext(searchTarget, {
+            maxQueries: maxQueriesPerMaterial
+          });
+        } catch (error) {
+          if (!isBrowserClosedError(error)) {
+            throw error;
+          }
+          warnings.push(`Retrying ${searchTarget.label} with one browser worker after Chromium closed unexpectedly.`);
+          materialResults = await searchMaterialWithFreshContext(searchTarget, {
+            maxQueries: maxQueriesPerMaterial,
+            concurrency: 1
+          });
+        }
         resultsByMaterial[searchTarget.key] = materialResults.results;
         discountedResultsByMaterial[searchTarget.key] = materialResults.discountedResults;
         warnings.push(...materialResults.warnings);
@@ -998,10 +1031,6 @@ async function runBrowserSearch(options = {}) {
           activeMaterial: searchTarget.label,
           message: `Finished ${searchTarget.label} with warnings.`
         });
-      } finally {
-        if (materialContext) {
-          await materialContext.close().catch(() => {});
-        }
       }
     }
 
