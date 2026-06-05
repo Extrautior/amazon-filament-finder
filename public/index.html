@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@200..700,0..1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css?v=28" />
+    <link rel="stylesheet" href="/styles.css?v=29" />
   </head>
   <body>
     <div class="app-shell">
@@ -65,8 +65,8 @@
         <section class="command-panel">
           <div class="command-copy">
             <p class="eyebrow">Amazon.com to Israel</p>
-            <h1>Free-shipping filament deals</h1>
-            <p class="lede">Live scrape results sorted by delivered cost per kilogram, with bundles separated by material.</p>
+            <h1>Filament Finder</h1>
+            <p class="lede">Free-shipping 1kg spools and bundles, ranked by delivered cost per kg.</p>
           </div>
 
           <form id="login-form" class="login-card">
@@ -137,19 +137,19 @@
     </div>
 
     <nav class="mobile-nav" aria-label="Mobile navigation">
-      <a href="#top">
+      <a class="active" href="#top" data-mobile-nav="home">
         <span class="material-symbols-outlined" aria-hidden="true">home</span>
         Home
       </a>
-      <button id="mobile-search-all" type="button">
+      <button id="mobile-search-all" type="button" data-mobile-nav="search">
         <span class="material-symbols-outlined" aria-hidden="true">manage_search</span>
         Search
       </button>
-      <a href="#results-shell">
+      <a href="#results-shell" data-mobile-nav="results">
         <span class="material-symbols-outlined" aria-hidden="true">view_list</span>
         Results
       </a>
-      <a href="#history">
+      <a href="#history" data-mobile-nav="history">
         <span class="material-symbols-outlined" aria-hidden="true">history</span>
         History
       </a>
@@ -157,6 +157,6 @@
 
     <aside id="floating-results-nav" class="floating-panel floating-panel-left" hidden></aside>
     <aside id="floating-color-nav" class="floating-panel floating-panel-right" hidden></aside>
-    <script src="/app.js?v=28"></script>
+    <script src="/app.js?v=29"></script>
   </body>
 </html>

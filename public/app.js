@@ -36,6 +36,8 @@ let currentResultIndex = 0;
 let floatingMenusEnabled = false;
 let floatingResultsNavScrollTop = 0;
 let floatingColorNavScrollTop = 0;
+let activeResultMaterial = "";
+let activeResultGroup = "cheapest";
 
 const COLOR_DEFINITIONS = [
   {
@@ -623,7 +625,7 @@ function sectionForMaterial(section, items) {
     : "";
 
   return `
-    <article class="material-card">
+    <article class="material-card result-panel" data-result-material="${escapeHtml(section.key || section.label)}" data-result-group="cheapest">
       <div class="material-header">
         <div>
           <span class="section-kicker">Cheapest by color</span>
@@ -651,7 +653,7 @@ function bundleSectionForMaterial(section, items) {
     : `<p class="empty">No full-spool ${escapeHtml(section.label)} bundles found in this run.</p>`;
 
   return `
-    <article class="material-card bundle-section">
+    <article class="material-card result-panel bundle-section" data-result-material="${escapeHtml(section.key || section.label)}" data-result-group="bundles">
       <div class="material-header">
         <div>
           <span class="section-kicker">Full spool multipacks</span>
@@ -672,7 +674,7 @@ function discountSectionForMaterial(section, items) {
     : `<p class="empty">No discounted ${escapeHtml(section.label)} deals found.</p>`;
 
   return `
-    <article class="material-card">
+    <article class="material-card result-panel" data-result-material="${escapeHtml(section.key || section.label)}" data-result-group="discounts">
       <div class="material-header">
         <div>
           <span class="section-kicker">Discount signals</span>
@@ -708,6 +710,7 @@ function renderWarnings(warnings) {
 }
 
 function clearCurrentResultsForSearch(searchRequest = {}) {
+  document.body.classList.remove("has-results");
   selectedHistoryJobId = null;
   renderWarnings([]);
   metaEl.hidden = true;
@@ -927,9 +930,8 @@ function wireShadeFilters() {
 }
 
 function syncResultsCarousel() {
-  const cards = resultCards();
-  const total = cards.length;
-  const hasResults = total > 0;
+  const panels = [...resultsEl.querySelectorAll(".result-panel")];
+  const hasResults = panels.length > 0;
 
   resultsShellEl.hidden = !hasResults;
   if (!hasResults) {
@@ -940,23 +942,49 @@ function syncResultsCarousel() {
     return;
   }
 
-  currentResultIndex = Math.max(0, Math.min(currentResultIndex, total - 1));
-
-  cards.forEach((card, index) => {
-    card.dataset.slideIndex = String(index);
-    card.classList.toggle("is-active", index === currentResultIndex);
-  });
-
-  const activeCard = cards[currentResultIndex];
-  if (activeCard) {
-    resultsEl.scrollTo({
-      left: activeCard.offsetLeft,
-      behavior: "smooth"
-    });
+  if (!activeResultMaterial || !panels.some((panel) => panel.dataset.resultMaterial === activeResultMaterial)) {
+    activeResultMaterial = panels[0]?.dataset.resultMaterial || "";
   }
 
-  renderFloatingResultsNav(cards);
-  renderFloatingColorNav(activeCard);
+  if (!panels.some((panel) => panel.dataset.resultMaterial === activeResultMaterial && panel.dataset.resultGroup === activeResultGroup)) {
+    activeResultGroup = "cheapest";
+  }
+
+  let activePanel = null;
+  for (const panel of panels) {
+    const isActive = panel.dataset.resultMaterial === activeResultMaterial && panel.dataset.resultGroup === activeResultGroup;
+    panel.hidden = !isActive;
+    panel.classList.toggle("is-active", isActive);
+    if (isActive) {
+      activePanel = panel;
+    }
+  }
+
+  for (const tab of resultsEl.querySelectorAll("[data-result-material-tab]")) {
+    const isActive = tab.dataset.resultMaterialTab === activeResultMaterial;
+    tab.classList.toggle("active", isActive);
+    tab.setAttribute("aria-selected", String(isActive));
+  }
+
+  for (const tab of resultsEl.querySelectorAll("[data-result-group-tab]")) {
+    const isActive = tab.dataset.resultGroupTab === activeResultGroup;
+    const countEl = tab.querySelector("span");
+    const matchingRailButton = [...resultsEl.querySelectorAll("[data-result-jump-material][data-result-jump-group]")]
+      .find((button) => button.dataset.resultJumpMaterial === activeResultMaterial && button.dataset.resultJumpGroup === tab.dataset.resultGroupTab);
+    if (countEl && matchingRailButton) {
+      countEl.textContent = matchingRailButton.querySelector("strong")?.textContent || "0";
+    }
+    tab.classList.toggle("active", isActive);
+    tab.setAttribute("aria-selected", String(isActive));
+  }
+
+  for (const button of resultsEl.querySelectorAll("[data-result-jump-material][data-result-jump-group]")) {
+    const isActive = button.dataset.resultJumpMaterial === activeResultMaterial && button.dataset.resultJumpGroup === activeResultGroup;
+    button.classList.toggle("active", isActive);
+  }
+
+  renderFloatingResultsNav([]);
+  renderFloatingColorNav(activePanel);
   updateFloatingMenuVisibility();
 }
 
@@ -970,9 +998,81 @@ function moveResultsCarousel(step) {
   syncResultsCarousel();
 }
 
+function renderResultGroupNav(sections, payload) {
+  return `
+    <aside class="result-group-rail" aria-label="Result groups">
+      <div class="result-group-rail-head">
+        <span class="section-kicker">Browse groups</span>
+        <strong>Results</strong>
+      </div>
+      ${sections.map((section) => {
+        const cheapestItems = payload.resultsByMaterial[section.key] || [];
+        const bundleItems = cheapestItems.filter(isBundleItem);
+        const discountItems = payload.discountedResultsByMaterial?.[section.key] || [];
+        const groups = [
+          ["cheapest", "Cheapest", cheapestItems.length],
+          ["bundles", "Bundles", bundleItems.length],
+          ["discounts", "Discounts", discountItems.length]
+        ];
+        return `
+          <div class="result-group-block">
+            <h3>${escapeHtml(section.label)}</h3>
+            ${groups.map(([group, label, count]) => `
+              <button type="button" data-result-jump-material="${escapeHtml(section.key)}" data-result-jump-group="${escapeHtml(group)}">
+                <span>${escapeHtml(label)}</span>
+                <strong>${count}</strong>
+              </button>
+            `).join("")}
+          </div>
+        `;
+      }).join("")}
+    </aside>
+  `;
+}
+
+function renderResultTabs(sections, payload) {
+  const activeSection = sections.find((section) => section.key === activeResultMaterial) || sections[0];
+  const cheapestItems = activeSection ? payload.resultsByMaterial[activeSection.key] || [] : [];
+  const bundleItems = cheapestItems.filter(isBundleItem);
+  const discountItems = activeSection ? payload.discountedResultsByMaterial?.[activeSection.key] || [] : [];
+  const groupCounts = {
+    cheapest: cheapestItems.length,
+    bundles: bundleItems.length,
+    discounts: discountItems.length
+  };
+
+  return `
+    <div class="result-mobile-tabs">
+      <div class="tab-row material-tab-row" role="tablist" aria-label="Materials">
+        ${sections.map((section) => `
+          <button type="button" role="tab" data-result-material-tab="${escapeHtml(section.key)}">
+            ${escapeHtml(section.label)}
+          </button>
+        `).join("")}
+      </div>
+      <div class="tab-row group-tab-row" role="tablist" aria-label="Result type">
+        ${[
+          ["cheapest", "Cheapest"],
+          ["bundles", "Bundles"],
+          ["discounts", "Discounts"]
+        ].map(([group, label]) => `
+          <button type="button" role="tab" data-result-group-tab="${escapeHtml(group)}">
+            ${escapeHtml(label)}
+            <span>${groupCounts[group] || 0}</span>
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function renderResults(payload) {
   if (!payload || typeof payload !== "object" || !payload.resultsByMaterial || !Array.isArray(payload.searchPlan)) {
     throw new Error("The server returned an incomplete search result payload. Refresh and try again.");
+  }
+  document.body.classList.add("has-results");
+  for (const navItem of document.querySelectorAll("[data-mobile-nav]")) {
+    navItem.classList.toggle("active", navItem.dataset.mobileNav === "results");
   }
 
   const cheapestCount = Object.values(payload.resultsByMaterial || {}).reduce((sum, items) => sum + items.length, 0);
@@ -986,13 +1086,30 @@ function renderResults(payload) {
   const sections = payload.searchPlan.length
     ? payload.searchPlan
     : Object.keys(payload.resultsByMaterial).map((key) => ({ key, label: key }));
-  resultsEl.innerHTML = sections.map((section) => {
+  if (!activeResultMaterial || !sections.some((section) => section.key === activeResultMaterial)) {
+    activeResultMaterial = sections[0]?.key || "";
+  }
+  activeResultGroup = ["cheapest", "bundles", "discounts"].includes(activeResultGroup) ? activeResultGroup : "cheapest";
+
+  const resultPanels = sections.map((section) => {
     const cheapestItems = payload.resultsByMaterial[section.key] || [];
     const cheapestSection = sectionForMaterial(section, cheapestItems);
     const bundleSection = bundleSectionForMaterial(section, cheapestItems);
     const discountedSection = discountSectionForMaterial(section, payload.discountedResultsByMaterial?.[section.key] || []);
     return `${cheapestSection}${bundleSection}${discountedSection}`;
   }).join("");
+
+  resultsEl.innerHTML = `
+    <div class="result-browser">
+      ${renderResultGroupNav(sections, payload)}
+      <div class="result-main">
+        ${renderResultTabs(sections, payload)}
+        <div class="result-panel-stack">
+          ${resultPanels}
+        </div>
+      </div>
+    </div>
+  `;
   wireShadeFilters();
   currentResultIndex = 0;
   syncResultsCarousel();
@@ -1171,7 +1288,18 @@ button.addEventListener("click", () => {
 
 if (mobileSearchAllButton) {
   mobileSearchAllButton.addEventListener("click", () => {
+    for (const navItem of document.querySelectorAll("[data-mobile-nav]")) {
+      navItem.classList.toggle("active", navItem.dataset.mobileNav === "search");
+    }
     void startSearch({ materials: ["PLA", "PETG", "ABS", "TPU", "ASA"] });
+  });
+}
+
+for (const mobileNavItem of document.querySelectorAll("[data-mobile-nav]")) {
+  mobileNavItem.addEventListener("click", () => {
+    for (const navItem of document.querySelectorAll("[data-mobile-nav]")) {
+      navItem.classList.toggle("active", navItem === mobileNavItem);
+    }
   });
 }
 
@@ -1202,6 +1330,29 @@ logoutButton.addEventListener("click", async () => {
 exportCsvButton.addEventListener("click", () => openDownload("/api/export.csv"));
 exportJsonButton.addEventListener("click", () => openDownload("/api/export.json"));
 resultsEl.addEventListener("click", (event) => {
+  const materialTab = event.target.closest("[data-result-material-tab]");
+  if (materialTab) {
+    activeResultMaterial = materialTab.dataset.resultMaterialTab || activeResultMaterial;
+    syncResultsCarousel();
+    return;
+  }
+
+  const groupTab = event.target.closest("[data-result-group-tab]");
+  if (groupTab) {
+    activeResultGroup = groupTab.dataset.resultGroupTab || activeResultGroup;
+    syncResultsCarousel();
+    return;
+  }
+
+  const groupJump = event.target.closest("[data-result-jump-material][data-result-jump-group]");
+  if (groupJump) {
+    activeResultMaterial = groupJump.dataset.resultJumpMaterial || activeResultMaterial;
+    activeResultGroup = groupJump.dataset.resultJumpGroup || activeResultGroup;
+    syncResultsCarousel();
+    scrollViewportToResults();
+    return;
+  }
+
   const jumpButton = event.target.closest("[data-color-target]");
   if (!jumpButton) {
     return;
