@@ -335,6 +335,11 @@ function stopSearchProgressPolling() {
 
 function renderSearchProgress(payload) {
   const percent = Math.max(0, Math.min(100, Number(payload.percent) || 0));
+  if (!payload.running && payload.phase !== "error") {
+    progressCardEl.hidden = true;
+    return;
+  }
+
   progressCardEl.hidden = false;
   progressFillEl.style.width = `${percent}%`;
   progressPercentEl.textContent = `${Math.round(percent)}%`;

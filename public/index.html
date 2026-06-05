@@ -6,126 +6,131 @@
     <title>Amazon Filament Finder</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@200..700,0..1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css?v=29" />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Hanken+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css?v=31" />
   </head>
   <body>
-    <div class="app-shell">
-      <header class="top-bar">
-        <a class="brand" href="#top" aria-label="Filament Finder home">
-          <span class="material-symbols-outlined brand-icon" aria-hidden="true">precision_manufacturing</span>
-          <span>Filament Finder</span>
-        </a>
-        <div class="top-search" aria-label="Search status">
-          <span class="material-symbols-outlined" aria-hidden="true">travel_explore</span>
-          <p id="status">Ready.</p>
-        </div>
-        <div class="top-actions">
-          <button id="export-csv" type="button" disabled title="Export CSV">
-            <span class="material-symbols-outlined" aria-hidden="true">table_view</span>
-            <span>CSV</span>
-          </button>
-          <button id="export-json" type="button" disabled title="Export JSON">
-            <span class="material-symbols-outlined" aria-hidden="true">data_object</span>
-            <span>JSON</span>
-          </button>
-          <button id="logout-button" type="button" title="Log out">
-            <span class="material-symbols-outlined" aria-hidden="true">logout</span>
-            <span>Log out</span>
-          </button>
-        </div>
-      </header>
+    <header class="app-topbar">
+      <a class="brand" href="#results-shell" aria-label="Filament Finder">
+        <span class="material-symbols-outlined" aria-hidden="true">precision_manufacturing</span>
+        <strong>Filament Finder</strong>
+      </a>
 
-      <aside class="side-rail" aria-label="Filament navigation">
-        <section class="session-panel">
+      <form id="custom-search-form" class="top-search-form">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <label for="custom-search-term">Search</label>
+        <input id="custom-search-term" name="custom-search-term" type="text" placeholder="Search filaments by brand, color, material..." />
+        <button id="run-custom-search" type="submit" title="Search custom term">
+          <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+        </button>
+      </form>
+
+      <div class="top-actions">
+        <button id="run-search" type="button" title="Search all materials">
+          <span class="material-symbols-outlined" aria-hidden="true">manage_search</span>
+          <span>Search All</span>
+        </button>
+        <button id="export-csv" type="button" disabled title="Export CSV">
+          <span class="material-symbols-outlined" aria-hidden="true">table_view</span>
+          <span>CSV</span>
+        </button>
+        <button id="export-json" type="button" disabled title="Export JSON">
+          <span class="material-symbols-outlined" aria-hidden="true">data_object</span>
+          <span>JSON</span>
+        </button>
+        <button id="logout-button" type="button" title="Log out">
+          <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="app-layout">
+      <aside class="filter-rail">
+        <section class="session-card">
           <span class="rail-label">Amazon session</span>
           <strong id="session-state">Checking...</strong>
-          <p>Free-shipping filter active for Amazon.com.</p>
+          <p id="status">Ready.</p>
         </section>
 
-        <nav class="material-nav" aria-label="Quick material searches">
-          <span class="rail-label">Quick search</span>
-          <button class="material-search" data-material="PLA" type="button">PLA</button>
-          <button class="material-search" data-material="PETG" type="button">PETG</button>
-          <button class="material-search" data-material="ABS" type="button">ABS</button>
-          <button class="material-search" data-material="TPU" type="button">TPU</button>
-          <button class="material-search" data-material="ASA" type="button">ASA</button>
-        </nav>
+        <form id="login-form" class="login-card">
+          <label for="password">Shared app password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+          <button id="login-button" type="submit">
+            <span class="material-symbols-outlined" aria-hidden="true">lock_open</span>
+            Unlock
+          </button>
+        </form>
+
+        <section class="filter-block">
+          <div class="rail-heading">
+            <h2>Materials</h2>
+            <button class="rail-reset" type="button" id="rail-search-all">All</button>
+          </div>
+          <div class="material-list">
+            <button class="material-search active" data-material="PLA" type="button">PLA <span>Search</span></button>
+            <button class="material-search" data-material="PETG" type="button">PETG <span>Search</span></button>
+            <button class="material-search" data-material="ABS" type="button">ABS <span>Search</span></button>
+            <button class="material-search" data-material="TPU" type="button">TPU <span>Search</span></button>
+            <button class="material-search" data-material="ASA" type="button">ASA <span>Search</span></button>
+          </div>
+        </section>
+
+        <section class="filter-block">
+          <div class="rail-heading">
+            <h2>Result groups</h2>
+          </div>
+          <div class="static-group-list">
+            <span>Cheapest</span>
+            <span>Bundles</span>
+            <span>Discounts</span>
+          </div>
+        </section>
 
         <section id="history" class="history" hidden>
-          <div class="history-header">
-            <span class="rail-label">Recent runs</span>
+          <div class="rail-heading">
+            <h2>Recent runs</h2>
           </div>
           <div id="history-list" class="history-list"></div>
         </section>
       </aside>
 
-      <main id="top" class="workspace">
-        <section class="command-panel">
-          <div class="command-copy">
-            <p class="eyebrow">Amazon.com to Israel</p>
-            <h1>Filament Finder</h1>
-            <p class="lede">Free-shipping 1kg spools and bundles, ranked by delivered cost per kg.</p>
+      <main class="results-page">
+        <section class="mobile-search-card">
+          <button id="mobile-search-all" type="button">
+            <span class="material-symbols-outlined" aria-hidden="true">manage_search</span>
+            Search All
+          </button>
+        </section>
+
+        <section class="summary-strip" id="meta" hidden>
+          <article>
+            <span>Marketplace</span>
+            <strong id="marketplace">amazon.com</strong>
+          </article>
+          <article>
+            <span>Last searched</span>
+            <strong id="searched-at">-</strong>
+          </article>
+          <article>
+            <span>Cheapest</span>
+            <strong id="cheapest-count">0</strong>
+          </article>
+          <article>
+            <span>Discounted</span>
+            <strong id="discount-count">0</strong>
+          </article>
+        </section>
+
+        <section class="progress-card" id="progress-card" hidden>
+          <div class="progress-head">
+            <strong id="progress-label">Preparing search...</strong>
+            <span id="progress-percent">0%</span>
           </div>
-
-          <form id="login-form" class="login-card">
-            <label for="password">Shared app password</label>
-            <div class="login-row">
-              <input id="password" name="password" type="password" autocomplete="current-password" required />
-              <button id="login-button" type="submit">
-                <span class="material-symbols-outlined" aria-hidden="true">lock_open</span>
-                Unlock
-              </button>
-            </div>
-          </form>
-
-          <div class="control-grid">
-            <button id="run-search" type="button">
-              <span class="material-symbols-outlined" aria-hidden="true">manage_search</span>
-              Search All
-            </button>
-            <form id="custom-search-form" class="custom-search-form">
-              <label for="custom-search-term">Custom term</label>
-              <div class="custom-search-row">
-                <input id="custom-search-term" name="custom-search-term" type="text" placeholder="Comgrow PETG filament" />
-                <button id="run-custom-search" type="submit">
-                  <span class="material-symbols-outlined" aria-hidden="true">search</span>
-                  Search
-                </button>
-              </div>
-            </form>
+          <div class="progress-track" aria-hidden="true">
+            <div class="progress-fill" id="progress-fill"></div>
           </div>
-
-          <section class="meta" id="meta" hidden>
-            <article>
-              <span>Marketplace</span>
-              <strong id="marketplace">amazon.com</strong>
-            </article>
-            <article>
-              <span>Last searched</span>
-              <strong id="searched-at">-</strong>
-            </article>
-            <article>
-              <span>Cheapest</span>
-              <strong id="cheapest-count">0</strong>
-            </article>
-            <article>
-              <span>Discounted</span>
-              <strong id="discount-count">0</strong>
-            </article>
-          </section>
-
-          <section class="progress-card" id="progress-card" hidden>
-            <div class="progress-head">
-              <strong id="progress-label">Preparing search...</strong>
-              <span id="progress-percent">0%</span>
-            </div>
-            <div class="progress-track" aria-hidden="true">
-              <div class="progress-fill" id="progress-fill"></div>
-            </div>
-            <p class="progress-meta" id="progress-meta">Waiting to start.</p>
-          </section>
+          <p class="progress-meta" id="progress-meta">Waiting to start.</p>
         </section>
 
         <section id="warnings" class="warnings" hidden></section>
@@ -137,18 +142,14 @@
     </div>
 
     <nav class="mobile-nav" aria-label="Mobile navigation">
-      <a class="active" href="#top" data-mobile-nav="home">
-        <span class="material-symbols-outlined" aria-hidden="true">home</span>
-        Home
-      </a>
-      <button id="mobile-search-all" type="button" data-mobile-nav="search">
-        <span class="material-symbols-outlined" aria-hidden="true">manage_search</span>
-        Search
-      </button>
-      <a href="#results-shell" data-mobile-nav="results">
+      <a class="active" href="#results-shell" data-mobile-nav="results">
         <span class="material-symbols-outlined" aria-hidden="true">view_list</span>
         Results
       </a>
+      <button id="mobile-nav-search" type="button" data-mobile-nav="search">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        Search
+      </button>
       <a href="#history" data-mobile-nav="history">
         <span class="material-symbols-outlined" aria-hidden="true">history</span>
         History
@@ -157,6 +158,6 @@
 
     <aside id="floating-results-nav" class="floating-panel floating-panel-left" hidden></aside>
     <aside id="floating-color-nav" class="floating-panel floating-panel-right" hidden></aside>
-    <script src="/app.js?v=29"></script>
+    <script src="/app.js?v=31"></script>
   </body>
 </html>
