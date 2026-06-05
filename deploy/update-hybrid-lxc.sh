@@ -18,6 +18,14 @@ if [[ ! -d "${APP_DIR}" ]]; then
   exit 1
 fi
 
+run_as_app() {
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -u "${APP_USER}" "$@"
+  else
+    runuser -u "${APP_USER}" -- "$@"
+  fi
+}
+
 echo "==> Updating code in ${APP_DIR}"
 cd "${APP_DIR}"
 
@@ -29,7 +37,7 @@ else
 fi
 
 echo "==> Installing Node dependencies"
-sudo -u "${APP_USER}" npm install
+run_as_app npm install
 
 echo "==> Preparing ${ENV_FILE}"
 touch "${ENV_FILE}"
@@ -81,7 +89,7 @@ mkdir -p /var/lib/amazon-filament-finder
 chown -R "${APP_USER}:${APP_USER}" /var/lib/amazon-filament-finder "${APP_DIR}"
 
 echo "==> Running tests"
-sudo -u "${APP_USER}" npm test
+run_as_app npm test
 
 echo "==> Restarting ${SERVICE_NAME}"
 systemctl daemon-reload
