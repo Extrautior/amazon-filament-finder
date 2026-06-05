@@ -658,10 +658,11 @@ function renderWarnings(warnings) {
 
   warningsEl.hidden = false;
   warningsEl.innerHTML = `
-    <h2>Warnings</h2>
-    <ul>
-      ${visibleWarnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}
-    </ul>
+    <button class="warning-summary" type="button" title="${escapeHtml(visibleWarnings.join(" | "))}">
+      <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+      <strong>${visibleWarnings.length} warning${visibleWarnings.length === 1 ? "" : "s"}</strong>
+      <span>${escapeHtml(String(visibleWarnings[0] || "").replace(/\s+/g, " ").slice(0, 140))}${String(visibleWarnings[0] || "").length > 140 ? "..." : ""}</span>
+    </button>
   `;
 }
 
@@ -1039,6 +1040,14 @@ function renderResults(payload) {
   marketplaceEl.textContent = payload.marketplace;
   cheapestCountEl.textContent = String(cheapestCount);
   discountCountEl.textContent = String(discountedCount);
+  for (const materialButton of materialButtons) {
+    const material = materialButton.dataset.material;
+    const count = material ? (payload.resultsByMaterial?.[material]?.length || 0) : 0;
+    const countEl = materialButton.querySelector("strong");
+    if (countEl) {
+      countEl.textContent = String(count);
+    }
+  }
   const sections = payload.searchPlan.length
     ? payload.searchPlan
     : Object.keys(payload.resultsByMaterial).map((key) => ({ key, label: key }));
@@ -1261,7 +1270,17 @@ for (const mobileNavItem of document.querySelectorAll("[data-mobile-nav]")) {
 
 for (const materialButton of materialButtons) {
   materialButton.addEventListener("click", () => {
-    void startSearch({ materials: [materialButton.dataset.material] });
+    const material = materialButton.dataset.material;
+    if (document.body.classList.contains("has-results") && material) {
+      activeResultMaterial = material;
+      activeResultGroup = "cheapest";
+      for (const button of materialButtons) {
+        button.classList.toggle("active", button === materialButton);
+      }
+      syncResultsCarousel();
+      return;
+    }
+    void startSearch({ materials: [material] });
   });
 }
 

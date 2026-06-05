@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Hanken+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css?v=33" />
+    <link rel="stylesheet" href="/styles.css?v=35" />
   </head>
   <body>
     <header class="app-topbar">
@@ -47,41 +47,53 @@
 
     <div class="app-layout">
       <aside class="filter-rail">
+        <nav class="side-nav" aria-label="Main navigation">
+          <a class="active" href="#results-shell">
+            <span class="material-symbols-outlined" aria-hidden="true">home</span>
+            Home
+          </a>
+          <a href="#results-shell">
+            <span class="material-symbols-outlined" aria-hidden="true">search</span>
+            Search
+          </a>
+          <a href="#history">
+            <span class="material-symbols-outlined" aria-hidden="true">history</span>
+            History
+          </a>
+        </nav>
+
         <section class="session-card">
-          <span class="rail-label">Amazon session</span>
           <strong id="session-state">Checking...</strong>
           <p id="status">Ready.</p>
         </section>
 
         <section class="filter-block">
           <div class="rail-heading">
-            <h2>Materials</h2>
-            <button class="rail-reset" type="button" id="rail-search-all">All</button>
+            <h2>Filters</h2>
+            <button class="rail-reset" type="button" id="rail-search-all">Reset</button>
           </div>
+          <h3 class="filter-label">Material</h3>
           <div class="material-list">
-            <button class="material-search active" data-material="PLA" type="button">PLA <span>Search</span></button>
-            <button class="material-search" data-material="PETG" type="button">PETG <span>Search</span></button>
-            <button class="material-search" data-material="ABS" type="button">ABS <span>Search</span></button>
-            <button class="material-search" data-material="TPU" type="button">TPU <span>Search</span></button>
-            <button class="material-search" data-material="ASA" type="button">ASA <span>Search</span></button>
+            <button class="material-search active" data-material="PLA" type="button"><span class="material-check"></span>PLA <strong>0</strong></button>
+            <button class="material-search" data-material="PETG" type="button"><span class="material-check"></span>PETG <strong>0</strong></button>
+            <button class="material-search" data-material="ABS" type="button"><span class="material-check"></span>ABS <strong>0</strong></button>
+            <button class="material-search" data-material="TPU" type="button"><span class="material-check"></span>TPU <strong>0</strong></button>
+            <button class="material-search" data-material="ASA" type="button"><span class="material-check"></span>ASA <strong>0</strong></button>
           </div>
-        </section>
 
-        <section class="filter-block">
-          <div class="rail-heading">
-            <h2>Result groups</h2>
-          </div>
-          <div class="static-group-list">
-            <span>Cheapest</span>
-            <span>Bundles</span>
-            <span>Discounts</span>
+          <h3 class="filter-label">Brand</h3>
+          <select class="filter-select" aria-label="Brand filter">
+            <option>All Brands</option>
+          </select>
+
+          <h3 class="filter-label">Price / kg</h3>
+          <div class="price-filter">
+            <input type="number" placeholder="Min" />
+            <input type="number" placeholder="Max" />
           </div>
         </section>
 
         <section id="history" class="history" hidden>
-          <div class="rail-heading">
-            <h2>Recent runs</h2>
-          </div>
           <div id="history-list" class="history-list"></div>
         </section>
       </aside>
@@ -158,6 +170,6 @@
 
     <aside id="floating-results-nav" class="floating-panel floating-panel-left" hidden></aside>
     <aside id="floating-color-nav" class="floating-panel floating-panel-right" hidden></aside>
-    <script src="/app.js?v=33"></script>
+    <script src="/app.js?v=35"></script>
   </body>
 </html>
