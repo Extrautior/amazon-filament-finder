@@ -47,9 +47,9 @@ The script will ask for:
 
 - your Decodo auth token, or `username:password`
 - your app password, or blank to keep the existing password
-- max Decodo requests per run, default `100`
+- max Decodo requests per run, default `10`
 
-Use `100` first. If you want a smaller test run, use `3`.
+Use `3` first for a tiny smoke test. Press Enter for `10` once you know the token works. Only use `100` or more after you are comfortable with Decodo billing/usage.
 
 ## Step 3: Open The App
 
@@ -65,13 +65,13 @@ These are the settings that make the new scraper behave how you asked:
 RESULT_LIMIT=0
 SEARCH_PROVIDER=hybrid
 DECODO_GEO=Israel
-DECODO_MAX_REQUESTS_PER_RUN=100
+DECODO_MAX_REQUESTS_PER_RUN=10
 AUTO_REFRESH_HOURS=8,20
 ```
 
 `RESULT_LIMIT=0` means the app keeps every result it finds.
 
-`DECODO_MAX_REQUESTS_PER_RUN=100` means the app may fetch up to 100 filtered Amazon pages per run. With two scheduled runs per day, this can use up to about 6,000 Decodo requests per month.
+`DECODO_MAX_REQUESTS_PER_RUN=10` means the app may fetch up to 10 filtered Amazon pages per run. With two scheduled runs per day, this can use up to about 600 Decodo requests per month. A value of `100` can use up to about 6,000 Decodo requests per month.
 
 ## If Something Fails
 

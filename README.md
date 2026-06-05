@@ -55,7 +55,7 @@ Optional browser verification/fallback:
 - `BROWSER_EXECUTABLE_PATH` if Chromium is not on `PATH`
 - `BROWSER_ARGS=--no-sandbox --disable-setuid-sandbox` if your LXC needs those Chromium flags
 
-By default, the hosted server can automatically run the same search as `Search All` twice per day at `08:00` and `20:00` in `Asia/Jerusalem`. Change `AUTO_REFRESH_HOURS` or disable it with `AUTO_REFRESH_ENABLED=false` if you want a different schedule. `RESULT_LIMIT=0` keeps every normalized result found. `DECODO_MAX_REQUESTS_PER_RUN` is the real crawl budget; raise it to let the app walk more filtered Amazon pages, or lower it to control Decodo cost.
+By default, the hosted server can automatically run the same search as `Search All` twice per day at `08:00` and `20:00` in `Asia/Jerusalem`. Change `AUTO_REFRESH_HOURS` or disable it with `AUTO_REFRESH_ENABLED=false` if you want a different schedule. `RESULT_LIMIT=0` keeps every normalized result found. `DECODO_MAX_REQUESTS_PER_RUN` is the real crawl budget; keep it low, such as `3` to `10`, while testing a free Decodo plan. Raise it only when you are comfortable with Decodo usage/cost.
 
 If you want Discord deal alerts, set `DEAL_NOTIFICATIONS_ENABLED=true` and provide `DISCORD_WEBHOOK_URL`. The server compares each successful run with the previous snapshot, keeps a persistent notified-history, and sends one summary message only for genuinely new cheapest or discounted deals that have not already been announced recently.
 

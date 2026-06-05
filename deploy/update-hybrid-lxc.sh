@@ -45,8 +45,8 @@ chmod 600 "${ENV_FILE}"
 
 read -r -p "Decodo auth token or username:password: " DECODO_AUTH_TOKEN_INPUT
 read -r -p "App password for the web UI [leave blank to keep existing]: " APP_PASSWORD_INPUT
-read -r -p "Max Decodo requests per run [100]: " DECODO_MAX_REQUESTS_INPUT
-DECODO_MAX_REQUESTS_INPUT="${DECODO_MAX_REQUESTS_INPUT:-100}"
+read -r -p "Max Decodo requests per run [10 for free-plan testing]: " DECODO_MAX_REQUESTS_INPUT
+DECODO_MAX_REQUESTS_INPUT="${DECODO_MAX_REQUESTS_INPUT:-10}"
 
 set_env() {
   local key="$1"

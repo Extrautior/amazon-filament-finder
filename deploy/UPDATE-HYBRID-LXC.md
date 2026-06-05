@@ -41,7 +41,7 @@ SEARCH_TIMEOUT_MS=30000
 SEARCH_PROVIDER=hybrid
 DECODO_AUTH_TOKEN=YOUR_DECODO_BASIC_TOKEN_OR_USERNAME_PASSWORD
 DECODO_GEO=Israel
-DECODO_MAX_REQUESTS_PER_RUN=100
+DECODO_MAX_REQUESTS_PER_RUN=10
 BROWSER_VERIFY_LIMIT_SCHEDULED=5
 BROWSER_VERIFY_LIMIT_MANUAL=25
 ENABLE_LEGACY_BROWSER_SEARCH=false
@@ -59,9 +59,9 @@ BROWSER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage
 Notes:
 
 - `RESULT_LIMIT=0` means show/export every result found.
-- `DECODO_MAX_REQUESTS_PER_RUN=100` means one scan can fetch up to 100 filtered Amazon pages across all search seeds/materials.
-- For 2 automatic runs per day, 100 requests/run can use up to about 6,000 Decodo requests/month.
-- If you need to reduce cost, lower `DECODO_MAX_REQUESTS_PER_RUN`.
+- `DECODO_MAX_REQUESTS_PER_RUN=10` means one scan can fetch up to 10 filtered Amazon pages across all search seeds/materials.
+- For 2 automatic runs per day, 10 requests/run can use up to about 600 Decodo requests/month.
+- For a first smoke test, use `3`. For deeper scans, raise this only after you are comfortable with Decodo billing/usage. A value of `100` can use up to about 6,000 Decodo requests/month.
 - `DECODO_AUTH_TOKEN` can be either Decodo's Basic token value or `username:password`; the app accepts both.
 
 Protect the env file:
