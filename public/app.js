@@ -26,6 +26,7 @@ const progressMetaEl = document.getElementById("progress-meta");
 const customSearchForm = document.getElementById("custom-search-form");
 const customSearchInput = document.getElementById("custom-search-term");
 const materialButtons = [...document.querySelectorAll(".material-search")];
+const mobileSearchAllButton = document.getElementById("mobile-search-all");
 
 let searchProgressTimer = null;
 let activeSearchJobId = null;
@@ -261,6 +262,19 @@ function freeShippingLabel(item) {
   return "Free shipping";
 }
 
+function isBundleItem(item) {
+  const packCount = Number(item?.packCount || 1);
+  const totalKg = Number(item?.totalKg || 1);
+  const spoolKg = Number(item?.spoolKg || 1);
+  const title = String(item?.title || "");
+
+  return (
+    packCount > 1 ||
+    totalKg > spoolKg ||
+    /\b(?:bundle|multi\s?pack|\d+\s?pack|\d+\s*x\s*1\s?kg|\d+\s?kg\s+bundle)\b/i.test(title)
+  );
+}
+
 function thresholdNote(item) {
   if (item.freeShippingKind !== "threshold") {
     return "";
@@ -298,6 +312,9 @@ function setExportEnabled(enabled) {
 
 function setLockedState(locked) {
   button.disabled = locked;
+  if (mobileSearchAllButton) {
+    mobileSearchAllButton.disabled = locked;
+  }
   for (const materialButton of materialButtons) {
     materialButton.disabled = locked;
   }
@@ -496,11 +513,13 @@ function cardForResult(item, index) {
   const amazonUrl = safeAmazonUrl(item.url);
   const imageUrl = safeImageUrl(item.imageUrl);
   const colorProfile = detectColorProfile(item);
+  const isBundle = isBundleItem(item);
   return `
-    <article class="result-card" data-shade-label="${escapeHtml(colorProfile.shadeLabel)}">
+    <article class="result-card${isBundle ? " bundle-card" : ""}" data-shade-label="${escapeHtml(colorProfile.shadeLabel)}">
       <div class="result-top">
         <span class="result-rank">#${index + 1}</span>
         <span class="pill pill-free">${escapeHtml(freeShippingLabel(item))}</span>
+        ${isBundle ? `<span class="pill pill-bundle">Bundle</span>` : ""}
         ${colorProfile.shadeLabel !== colorProfile.colorLabel ? `<span class="pill pill-shade">${escapeHtml(colorProfile.shadeLabel)}</span>` : ""}
         ${item.hasDiscount ? `<span class="pill pill-deal">${escapeHtml(item.discountPercent != null ? `Save ${item.discountPercent}%` : "Discount")}</span>` : ""}
       </div>
@@ -542,6 +561,10 @@ function cardForResult(item, index) {
 function gridClassName(itemCount, extraClassName = "") {
   const layoutClass = itemCount >= 4 ? "result-grid-dense" : "result-grid-compact";
   return ["result-grid", extraClassName, layoutClass].filter(Boolean).join(" ");
+}
+
+function sectionTitleLabel(section, suffix) {
+  return `${section.label} ${suffix}`;
 }
 
 function sectionForMaterial(section, items) {
@@ -602,7 +625,10 @@ function sectionForMaterial(section, items) {
   return `
     <article class="material-card">
       <div class="material-header">
-        <h2>${escapeHtml(section.label)} Cheapest Results</h2>
+        <div>
+          <span class="section-kicker">Cheapest by color</span>
+          <h2>${escapeHtml(sectionTitleLabel(section, "Cheapest Results"))}</h2>
+        </div>
         <span>${items.length} result${items.length === 1 ? "" : "s"} across ${colorGroups.length} color group${colorGroups.length === 1 ? "" : "s"}</span>
       </div>
       <div class="material-layout${colorGroups.length ? " has-color-sidebar" : ""}">
@@ -610,6 +636,31 @@ function sectionForMaterial(section, items) {
         <div class="color-groups">
         ${cards}
         </div>
+      </div>
+    </article>
+  `;
+}
+
+function bundleSectionForMaterial(section, items) {
+  const bundleItems = items
+    .filter(isBundleItem)
+    .slice()
+    .sort(compareResultPrices);
+  const cards = bundleItems.length
+    ? bundleItems.map((item, index) => cardForResult(item, index)).join("")
+    : `<p class="empty">No full-spool ${escapeHtml(section.label)} bundles found in this run.</p>`;
+
+  return `
+    <article class="material-card bundle-section">
+      <div class="material-header">
+        <div>
+          <span class="section-kicker">Full spool multipacks</span>
+          <h2>${escapeHtml(sectionTitleLabel(section, "Bundles"))}</h2>
+        </div>
+        <span>${bundleItems.length} bundle${bundleItems.length === 1 ? "" : "s"}</span>
+      </div>
+      <div class="${gridClassName(bundleItems.length, "bundle-grid")}">
+        ${cards}
       </div>
     </article>
   `;
@@ -623,7 +674,10 @@ function discountSectionForMaterial(section, items) {
   return `
     <article class="material-card">
       <div class="material-header">
-        <h2>${escapeHtml(section.label)} Discounted Deals</h2>
+        <div>
+          <span class="section-kicker">Discount signals</span>
+          <h2>${escapeHtml(sectionTitleLabel(section, "Discounted Deals"))}</h2>
+        </div>
         <span>${items.length} result${items.length === 1 ? "" : "s"}</span>
       </div>
       <div class="${gridClassName(items.length)}">
@@ -669,7 +723,10 @@ function clearCurrentResultsForSearch(searchRequest = {}) {
   resultsEl.innerHTML = `
     <article class="material-card is-active">
       <div class="material-header">
-        <h2>Current Search Running</h2>
+        <div>
+          <span class="section-kicker">Live scrape</span>
+          <h2>Current Search Running</h2>
+        </div>
         <span>${labels.map(escapeHtml).join(", ")}</span>
       </div>
       <p class="empty">Collecting fresh Amazon pages. Previous warnings are hidden until this job finishes.</p>
@@ -930,9 +987,11 @@ function renderResults(payload) {
     ? payload.searchPlan
     : Object.keys(payload.resultsByMaterial).map((key) => ({ key, label: key }));
   resultsEl.innerHTML = sections.map((section) => {
-    const cheapestSection = sectionForMaterial(section, payload.resultsByMaterial[section.key] || []);
+    const cheapestItems = payload.resultsByMaterial[section.key] || [];
+    const cheapestSection = sectionForMaterial(section, cheapestItems);
+    const bundleSection = bundleSectionForMaterial(section, cheapestItems);
     const discountedSection = discountSectionForMaterial(section, payload.discountedResultsByMaterial?.[section.key] || []);
-    return `${cheapestSection}${discountedSection}`;
+    return `${cheapestSection}${bundleSection}${discountedSection}`;
   }).join("");
   wireShadeFilters();
   currentResultIndex = 0;
@@ -1109,6 +1168,12 @@ loginForm.addEventListener("submit", async (event) => {
 button.addEventListener("click", () => {
   void startSearch({ materials: ["PLA", "PETG", "ABS", "TPU", "ASA"] });
 });
+
+if (mobileSearchAllButton) {
+  mobileSearchAllButton.addEventListener("click", () => {
+    void startSearch({ materials: ["PLA", "PETG", "ABS", "TPU", "ASA"] });
+  });
+}
 
 for (const materialButton of materialButtons) {
   materialButton.addEventListener("click", () => {

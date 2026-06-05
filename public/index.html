@@ -4,101 +4,121 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Amazon Filament Finder</title>
-    <link rel="stylesheet" href="/styles.css?v=27" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@200..700,0..1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css?v=28" />
   </head>
   <body>
-    <main class="shell">
-      <section class="dashboard-shell">
-        <section class="hero">
-          <div class="hero-top">
-            <div class="hero-copy">
-              <p class="eyebrow">Amazon.com to Israel</p>
-              <h1>Amazon Filament Finder</h1>
-              <p class="lede">
-                Search live Amazon listings for PLA, PETG, ABS, TPU, and ASA filament that can ship to Israel, then sort by
-                the cheapest delivered cost per kilogram.
-              </p>
-            </div>
-            <div class="hero-status">
-              <div class="status-chip">
-                <span class="status-chip-label">Shared session</span>
-                <strong id="session-state">Checking…</strong>
-              </div>
-              <p class="hint">
-                This hosted app reuses one shared Amazon session inside the server container. If results stop working,
-                refresh the Amazon session on the host.
-              </p>
-            </div>
+    <div class="app-shell">
+      <header class="top-bar">
+        <a class="brand" href="#top" aria-label="Filament Finder home">
+          <span class="material-symbols-outlined brand-icon" aria-hidden="true">precision_manufacturing</span>
+          <span>Filament Finder</span>
+        </a>
+        <div class="top-search" aria-label="Search status">
+          <span class="material-symbols-outlined" aria-hidden="true">travel_explore</span>
+          <p id="status">Ready.</p>
+        </div>
+        <div class="top-actions">
+          <button id="export-csv" type="button" disabled title="Export CSV">
+            <span class="material-symbols-outlined" aria-hidden="true">table_view</span>
+            <span>CSV</span>
+          </button>
+          <button id="export-json" type="button" disabled title="Export JSON">
+            <span class="material-symbols-outlined" aria-hidden="true">data_object</span>
+            <span>JSON</span>
+          </button>
+          <button id="logout-button" type="button" title="Log out">
+            <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+            <span>Log out</span>
+          </button>
+        </div>
+      </header>
+
+      <aside class="side-rail" aria-label="Filament navigation">
+        <section class="session-panel">
+          <span class="rail-label">Amazon session</span>
+          <strong id="session-state">Checking...</strong>
+          <p>Free-shipping filter active for Amazon.com.</p>
+        </section>
+
+        <nav class="material-nav" aria-label="Quick material searches">
+          <span class="rail-label">Quick search</span>
+          <button class="material-search" data-material="PLA" type="button">PLA</button>
+          <button class="material-search" data-material="PETG" type="button">PETG</button>
+          <button class="material-search" data-material="ABS" type="button">ABS</button>
+          <button class="material-search" data-material="TPU" type="button">TPU</button>
+          <button class="material-search" data-material="ASA" type="button">ASA</button>
+        </nav>
+
+        <section id="history" class="history" hidden>
+          <div class="history-header">
+            <span class="rail-label">Recent runs</span>
+          </div>
+          <div id="history-list" class="history-list"></div>
+        </section>
+      </aside>
+
+      <main id="top" class="workspace">
+        <section class="command-panel">
+          <div class="command-copy">
+            <p class="eyebrow">Amazon.com to Israel</p>
+            <h1>Free-shipping filament deals</h1>
+            <p class="lede">Live scrape results sorted by delivered cost per kilogram, with bundles separated by material.</p>
           </div>
 
           <form id="login-form" class="login-card">
             <label for="password">Shared app password</label>
             <div class="login-row">
               <input id="password" name="password" type="password" autocomplete="current-password" required />
-              <button id="login-button" type="submit">Unlock</button>
+              <button id="login-button" type="submit">
+                <span class="material-symbols-outlined" aria-hidden="true">lock_open</span>
+                Unlock
+              </button>
             </div>
-            <p class="hint">Use the one shared password from the server config. Your browser keeps a session cookie after login.</p>
           </form>
 
-          <div class="controls-panel">
-            <div class="controls">
-              <button id="run-search">Search All</button>
-              <button id="export-csv" type="button" disabled>Export CSV</button>
-              <button id="export-json" type="button" disabled>Export JSON</button>
-              <button id="logout-button" type="button">Log Out</button>
-            </div>
-            <div class="status-panel">
-              <span class="status-label">Live status</span>
-              <p id="status">Ready.</p>
-            </div>
-          </div>
-
-          <div class="search-toolbar">
-            <div class="quick-searches toolbar-block">
-              <span class="toolbar-label">Quick searches</span>
-              <div class="toolbar-actions">
-                <button class="material-search" data-material="PLA" type="button">PLA</button>
-                <button class="material-search" data-material="PETG" type="button">PETG</button>
-                <button class="material-search" data-material="ABS" type="button">ABS</button>
-                <button class="material-search" data-material="TPU" type="button">TPU</button>
-                <button class="material-search" data-material="ASA" type="button">ASA</button>
-              </div>
-            </div>
-            <form id="custom-search-form" class="custom-search-form toolbar-block">
-              <label class="toolbar-label" for="custom-search-term">Custom term</label>
+          <div class="control-grid">
+            <button id="run-search" type="button">
+              <span class="material-symbols-outlined" aria-hidden="true">manage_search</span>
+              Search All
+            </button>
+            <form id="custom-search-form" class="custom-search-form">
+              <label for="custom-search-term">Custom term</label>
               <div class="custom-search-row">
-                <input id="custom-search-term" name="custom-search-term" type="text" placeholder="ASA filament" />
-                <button id="run-custom-search" type="submit">Search Custom</button>
+                <input id="custom-search-term" name="custom-search-term" type="text" placeholder="Comgrow PETG filament" />
+                <button id="run-custom-search" type="submit">
+                  <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                  Search
+                </button>
               </div>
             </form>
           </div>
 
           <section class="meta" id="meta" hidden>
-            <article class="stat-card">
-              <span class="meta-label">Marketplace</span>
+            <article>
+              <span>Marketplace</span>
               <strong id="marketplace">amazon.com</strong>
             </article>
-            <article class="stat-card">
-              <span class="meta-label">Last searched</span>
+            <article>
+              <span>Last searched</span>
               <strong id="searched-at">-</strong>
             </article>
-            <article class="stat-card">
-              <span class="meta-label">Cheapest found</span>
+            <article>
+              <span>Cheapest</span>
               <strong id="cheapest-count">0</strong>
             </article>
-            <article class="stat-card">
-              <span class="meta-label">Discounted found</span>
+            <article>
+              <span>Discounted</span>
               <strong id="discount-count">0</strong>
-            </article>
-            <article class="stat-card">
-              <span class="meta-label">Filter</span>
-              <strong>Free shipping only</strong>
             </article>
           </section>
 
           <section class="progress-card" id="progress-card" hidden>
             <div class="progress-head">
-              <strong id="progress-label">Preparing search…</strong>
+              <strong id="progress-label">Preparing search...</strong>
               <span id="progress-percent">0%</span>
             </div>
             <div class="progress-track" aria-hidden="true">
@@ -108,22 +128,35 @@
           </section>
         </section>
 
-        <aside id="history" class="history" hidden>
-          <div class="history-header">
-            <h2>Recent Searches</h2>
-            <p>Jump back into saved result sets from the latest searches run on this server.</p>
-          </div>
-          <div id="history-list" class="history-list"></div>
-        </aside>
-      </section>
+        <section id="warnings" class="warnings" hidden></section>
 
-      <section id="warnings" class="warnings" hidden></section>
-      <section id="results-shell" class="results-shell" hidden>
-        <section id="results" class="results"></section>
-      </section>
-    </main>
+        <section id="results-shell" class="results-shell" hidden>
+          <section id="results" class="results"></section>
+        </section>
+      </main>
+    </div>
+
+    <nav class="mobile-nav" aria-label="Mobile navigation">
+      <a href="#top">
+        <span class="material-symbols-outlined" aria-hidden="true">home</span>
+        Home
+      </a>
+      <button id="mobile-search-all" type="button">
+        <span class="material-symbols-outlined" aria-hidden="true">manage_search</span>
+        Search
+      </button>
+      <a href="#results-shell">
+        <span class="material-symbols-outlined" aria-hidden="true">view_list</span>
+        Results
+      </a>
+      <a href="#history">
+        <span class="material-symbols-outlined" aria-hidden="true">history</span>
+        History
+      </a>
+    </nav>
+
     <aside id="floating-results-nav" class="floating-panel floating-panel-left" hidden></aside>
     <aside id="floating-color-nav" class="floating-panel floating-panel-right" hidden></aside>
-    <script src="/app.js?v=27"></script>
+    <script src="/app.js?v=28"></script>
   </body>
-  </html>
+</html>
