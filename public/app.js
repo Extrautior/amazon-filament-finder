@@ -19,7 +19,12 @@ const COLOR_DEFINITIONS = [
 const state = {
   activeView: "scrape",
   activeMaterial: "all",
+  activeColor: "all",
   activeGroup: "deals",
+  resultQuery: "",
+  sortMode: "price-asc",
+  page: 1,
+  pageSize: 24,
   authenticated: false,
   exportEnabled: false,
   history: [],
@@ -145,6 +150,21 @@ function sortByPrice(left, right) {
   return (left.pricePerKg ?? Number.POSITIVE_INFINITY) - (right.pricePerKg ?? Number.POSITIVE_INFINITY);
 }
 
+function sortItems(items) {
+  return [...items].sort((left, right) => {
+    if (state.sortMode === "price-desc") {
+      return -sortByPrice(left, right);
+    }
+    if (state.sortMode === "discount-desc") {
+      return (Number(right.discountPercent) || 0) - (Number(left.discountPercent) || 0) || sortByPrice(left, right);
+    }
+    if (state.sortMode === "delivered-asc") {
+      return (left.totalValue ?? Number.POSITIVE_INFINITY) - (right.totalValue ?? Number.POSITIVE_INFINITY);
+    }
+    return sortByPrice(left, right);
+  });
+}
+
 function allDealItems() {
   if (!state.payload?.resultsByMaterial) {
     return [];
@@ -173,7 +193,37 @@ function visibleItems() {
   if (state.activeMaterial !== "all") {
     items = items.filter((item) => detectMaterial(item).toUpperCase() === state.activeMaterial);
   }
-  return items;
+  if (state.activeColor !== "all") {
+    items = items.filter((item) => detectColorProfile(item).key === state.activeColor);
+  }
+  const query = state.resultQuery.trim().toLowerCase();
+  if (query) {
+    items = items.filter((item) => {
+      const haystack = [
+        item.title,
+        item.material,
+        detectMaterial(item),
+        detectBrand(item),
+        detectColorProfile(item).label,
+        item.asin
+      ].join(" ").toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+  return sortItems(items);
+}
+
+function pagedItems() {
+  const items = visibleItems();
+  const pageCount = Math.max(1, Math.ceil(items.length / state.pageSize));
+  const page = Math.min(Math.max(1, state.page), pageCount);
+  const start = (page - 1) * state.pageSize;
+  return {
+    items: items.slice(start, start + state.pageSize),
+    page,
+    pageCount,
+    total: items.length
+  };
 }
 
 function materialCounts() {
@@ -229,16 +279,11 @@ function desktopSidebar() {
           <span>v2.1 Precision</span>
         </div>
       </div>
-      <button class="upgrade-button" type="button">Upgrade Plan</button>
       <nav class="side-links" aria-label="Primary">
         ${navButton("gallery", "inventory_2", "Filament Gallery")}
         ${navButton("scrape", "search_check", "New Amazon Scrape")}
         ${navButton("history", "history", "Scrape History")}
       </nav>
-      <div class="side-footer">
-        <button class="side-link" type="button"><span class="material-symbols-outlined">settings</span>Settings</button>
-        <button class="side-link" type="button"><span class="material-symbols-outlined">help</span>Support</button>
-      </div>
     </aside>
   `;
 }
@@ -253,7 +298,7 @@ function navButton(view, icon, label) {
 }
 
 function topBar() {
-  const searchPlaceholder = state.activeView === "history" ? "Search logs..." : "Search filaments, colors, or SKUs...";
+  const searchPlaceholder = state.activeView === "history" ? "Search logs..." : "Filter scraped filaments...";
   return `
     <header class="top-shell">
       <div class="mobile-title">
@@ -262,8 +307,8 @@ function topBar() {
       </div>
       <form class="top-search" id="custom-search-form">
         <span class="material-symbols-outlined">search</span>
-        <input id="custom-search-term" type="text" placeholder="${escapeHtml(searchPlaceholder)}" />
-        <button type="submit" title="Search"><span class="material-symbols-outlined">arrow_forward</span></button>
+        <input id="result-filter-term" type="text" value="${escapeHtml(state.resultQuery)}" placeholder="${escapeHtml(searchPlaceholder)}" />
+        <button type="submit" title="Filter"><span class="material-symbols-outlined">arrow_forward</span></button>
       </form>
       <div class="top-actions">
         <button id="export-csv" type="button" ${state.exportEnabled ? "" : "disabled"} title="Export CSV"><span class="material-symbols-outlined">csv</span></button>
@@ -325,7 +370,9 @@ function galleryView() {
         <div class="filter-section">
           <h3>Colors</h3>
           <div class="color-filter-row">
-            ${["white", "black", "gray", "red", "blue", "green", "yellow", "orange", "multi", "transparent"].map((color) => `<button class="filter-dot color-${color}" type="button"></button>`).join("")}
+            ${["all", "white", "black", "gray", "red", "blue", "green", "yellow", "orange", "multi", "transparent"].map((color) => `
+              <button class="filter-dot ${state.activeColor === color ? "active" : ""} ${color === "all" ? "color-all" : `color-${color}`}" type="button" data-color-filter="${color}" title="${escapeHtml(color)}"></button>
+            `).join("")}
           </div>
         </div>
       </aside>
@@ -336,7 +383,12 @@ function galleryView() {
             <p>${escapeHtml(currentResultsLabel())}</p>
           </div>
           <label class="sort-control">Sort by:
-            <select><option>Highest Discount %</option><option>Price Low to High</option></select>
+            <select id="sort-results">
+              <option value="price-asc" ${state.sortMode === "price-asc" ? "selected" : ""}>Price Low to High</option>
+              <option value="price-desc" ${state.sortMode === "price-desc" ? "selected" : ""}>Price High to Low</option>
+              <option value="discount-desc" ${state.sortMode === "discount-desc" ? "selected" : ""}>Highest Discount %</option>
+              <option value="delivered-asc" ${state.sortMode === "delivered-asc" ? "selected" : ""}>Total Delivered</option>
+            </select>
           </label>
         </div>
         <div class="group-tabs">
@@ -355,14 +407,24 @@ function groupTab(group, label, count) {
 }
 
 function productGrid() {
-  const items = visibleItems();
+  const page = pagedItems();
   if (!state.payload) {
     return `<div class="empty-state"><h2>No cached gallery yet</h2><p>Start a scrape or unlock the app to load the latest cached results.</p></div>`;
   }
-  if (!items.length) {
+  if (!page.total) {
     return `<div class="empty-state"><h2>No matching filament deals</h2><p>Try another material or result group.</p></div>`;
   }
-  return `<div class="product-grid">${items.map(productCard).join("")}</div>`;
+  return `
+    <div class="product-grid">${page.items.map(productCard).join("")}</div>
+    <div class="pager">
+      <span>Showing ${(page.page - 1) * state.pageSize + 1} to ${(page.page - 1) * state.pageSize + page.items.length} of ${page.total}</span>
+      <div>
+        <button type="button" data-page="prev" ${page.page <= 1 ? "disabled" : ""}><span class="material-symbols-outlined">chevron_left</span></button>
+        <strong>Page ${page.page} / ${page.pageCount}</strong>
+        <button type="button" data-page="next" ${page.page >= page.pageCount ? "disabled" : ""}><span class="material-symbols-outlined">chevron_right</span></button>
+      </div>
+    </div>
+  `;
 }
 
 function productCard(item, index) {
@@ -416,22 +478,14 @@ function scrapeView() {
           <span class="material-symbols-outlined">link</span>
           <textarea id="scrape-target" rows="4" placeholder="https://amazon.com/dp/B08X...&#10;B09Z1X...&#10;Keywords..."></textarea>
         </div>
-        <div class="scrape-options">
-          <div>
-            <span class="material-symbols-outlined">layers</span>
-            <strong>Deep Scrape</strong>
-            <small>Extract variations and product metadata</small>
-            <i></i>
-          </div>
-          <div>
-            <span class="material-symbols-outlined">speed</span>
-            <strong>Throttle Speed</strong>
-            <select><option>Moderate</option><option>Stealth</option></select>
-          </div>
-        </div>
         <button class="scrape-submit" type="submit" ${state.searching ? "disabled" : ""}>
           <span class="material-symbols-outlined">${state.searching ? "sync" : "rocket_launch"}</span>
           ${state.searching ? "Initializing..." : "Start Scrape Sequence"}
+        </button>
+        <button class="scrape-all-button" id="scrape-all-materials" type="button" ${state.searching ? "disabled" : ""}>
+          <span class="material-symbols-outlined">manage_search</span>
+          Search All Filaments
+          <small>PLA · PETG · ABS · ASA · TPU</small>
         </button>
       </form>
       <section class="progress-console ${isActive ? "active" : ""}">
@@ -535,9 +589,19 @@ function bindEvents() {
 
   app.querySelector("#custom-search-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const term = app.querySelector("#custom-search-term")?.value.trim();
-    if (term) {
-      void startSearch({ customTerm: term });
+    state.resultQuery = app.querySelector("#result-filter-term")?.value.trim() || "";
+    state.page = 1;
+    if (state.activeView === "scrape") {
+      state.activeView = "gallery";
+    }
+    render();
+  });
+
+  app.querySelector("#result-filter-term")?.addEventListener("input", (event) => {
+    state.resultQuery = event.target.value || "";
+    state.page = 1;
+    if (state.activeView !== "scrape") {
+      render();
     }
   });
 
@@ -545,6 +609,10 @@ function bindEvents() {
     event.preventDefault();
     const term = app.querySelector("#scrape-target")?.value.trim();
     void startSearch(term ? { customTerm: term } : { materials: MATERIALS });
+  });
+
+  app.querySelector("#scrape-all-materials")?.addEventListener("click", () => {
+    void startSearch({ materials: MATERIALS });
   });
 
   app.querySelector("#run-search")?.addEventListener("click", () => {
@@ -570,19 +638,46 @@ function bindEvents() {
   for (const button of app.querySelectorAll("[data-material-filter]")) {
     button.addEventListener("click", () => {
       state.activeMaterial = state.activeMaterial === button.dataset.materialFilter ? "all" : button.dataset.materialFilter;
+      state.page = 1;
       render();
     });
   }
 
   app.querySelector("[data-reset-filters]")?.addEventListener("click", () => {
     state.activeMaterial = "all";
+    state.activeColor = "all";
     state.activeGroup = "deals";
+    state.resultQuery = "";
+    state.sortMode = "price-asc";
+    state.page = 1;
     render();
   });
 
   for (const button of app.querySelectorAll("[data-group-filter]")) {
     button.addEventListener("click", () => {
       state.activeGroup = button.dataset.groupFilter || "deals";
+      state.page = 1;
+      render();
+    });
+  }
+
+  for (const button of app.querySelectorAll("[data-color-filter]")) {
+    button.addEventListener("click", () => {
+      state.activeColor = button.dataset.colorFilter || "all";
+      state.page = 1;
+      render();
+    });
+  }
+
+  app.querySelector("#sort-results")?.addEventListener("change", (event) => {
+    state.sortMode = event.target.value || "price-asc";
+    state.page = 1;
+    render();
+  });
+
+  for (const button of app.querySelectorAll("[data-page]")) {
+    button.addEventListener("click", () => {
+      state.page += button.dataset.page === "next" ? 1 : -1;
       render();
     });
   }
@@ -662,6 +757,7 @@ async function loadLatestResults(jobId = null) {
   state.payload = payload;
   state.selectedHistoryJobId = payload.jobId || jobId || null;
   state.exportEnabled = true;
+  state.page = 1;
   state.activeView = "gallery";
   await loadSearchHistory().catch(() => {});
   render();
