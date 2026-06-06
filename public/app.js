@@ -524,7 +524,8 @@ function cardForResult(item, index) {
   return `
     <article class="product-card${isBundle ? " bundle-card" : ""}" data-shade-label="${escapeHtml(colorProfile.shadeLabel)}">
       <div class="product-media">
-        ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" />` : `<span class="material-symbols-outlined" aria-hidden="true">deployed_code</span>`}
+        <span class="product-placeholder material-symbols-outlined" aria-hidden="true">deployed_code</span>
+        ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.remove()" />` : ""}
         <div class="product-badges">
           <span>${escapeHtml(freeShippingLabel(item))}</span>
           ${isBundle ? `<span>Bundle</span>` : ""}
@@ -557,7 +558,10 @@ function cardForResult(item, index) {
           <div><dt>Import</dt><dd>${money(item.importFeesValue, item.currency)}</dd></div>
           <div><dt>Spools</dt><dd>${escapeHtml(item.packCount || 1)} x ${escapeHtml(item.spoolKg || 1)}kg</dd></div>
         </dl>
-        <a class="open-link" href="${escapeHtml(amazonUrl)}" target="_blank" rel="noreferrer">Open on Amazon</a>
+        <a class="open-link" href="${escapeHtml(amazonUrl)}" target="_blank" rel="noreferrer">
+          <span>Open on Amazon</span>
+          <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
+        </a>
       </div>
     </article>
   `;
@@ -577,9 +581,8 @@ function resultFeedHeader(section, items, title, kicker) {
   return `
     <div class="feed-header">
       <div>
-        <span class="section-kicker">${escapeHtml(kicker)}</span>
         <h2>${escapeHtml(title)}</h2>
-        <p>${items.length} result${items.length === 1 ? "" : "s"} across ${colorGroups.length} color group${colorGroups.length === 1 ? "" : "s"}</p>
+        <p>${escapeHtml(kicker)} · ${escapeHtml(section.label)} · ${items.length} result${items.length === 1 ? "" : "s"}</p>
       </div>
       <label class="feed-sort">
         <span>Sort by</span>
@@ -681,15 +684,14 @@ function clearCurrentResultsForSearch(searchRequest = {}) {
       ? [searchRequest.customTerm]
       : ["PLA", "PETG", "ABS", "TPU", "ASA"];
   resultsEl.innerHTML = `
-    <article class="material-card is-active">
-      <div class="material-header">
+    <article class="result-panel is-active" data-result-material="${escapeHtml(labels[0] || "search")}" data-result-group="cheapest">
+      <div class="feed-header">
         <div>
-          <span class="section-kicker">Live scrape</span>
-          <h2>Current Search Running</h2>
+          <h2>Available Filaments</h2>
+          <p>Searching ${labels.map(escapeHtml).join(", ")} now.</p>
         </div>
-        <span>${labels.map(escapeHtml).join(", ")}</span>
       </div>
-      <p class="empty">Collecting fresh Amazon pages. Previous warnings are hidden until this job finishes.</p>
+      <p class="empty">Collecting fresh Amazon listings.</p>
     </article>
   `;
   currentResultIndex = 0;
@@ -698,12 +700,12 @@ function clearCurrentResultsForSearch(searchRequest = {}) {
 }
 
 function resultSlideLabel(card, index) {
-  const title = card.querySelector(".material-header h2")?.textContent?.trim();
+  const title = card.querySelector(".feed-header h2")?.textContent?.trim();
   return title || `Group ${index + 1}`;
 }
 
 function resultCards() {
-  return [...resultsEl.querySelectorAll(".material-card")];
+  return [...resultsEl.querySelectorAll(".result-panel")];
 }
 
 function currentResultCard() {
@@ -926,10 +928,9 @@ function syncResultsCarousel() {
   for (const tab of resultsEl.querySelectorAll("[data-result-group-tab]")) {
     const isActive = tab.dataset.resultGroupTab === activeResultGroup;
     const countEl = tab.querySelector("span");
-    const matchingRailButton = [...resultsEl.querySelectorAll("[data-result-jump-material][data-result-jump-group]")]
-      .find((button) => button.dataset.resultJumpMaterial === activeResultMaterial && button.dataset.resultJumpGroup === tab.dataset.resultGroupTab);
-    if (countEl && matchingRailButton) {
-      countEl.textContent = matchingRailButton.querySelector("strong")?.textContent || "0";
+    const matchingPanel = panels.find((panel) => panel.dataset.resultMaterial === activeResultMaterial && panel.dataset.resultGroup === tab.dataset.resultGroupTab);
+    if (countEl && matchingPanel) {
+      countEl.textContent = String(matchingPanel.querySelectorAll(".product-card").length);
     }
     tab.classList.toggle("active", isActive);
     tab.setAttribute("aria-selected", String(isActive));
@@ -1066,7 +1067,6 @@ function renderResults(payload) {
 
   resultsEl.innerHTML = `
     <div class="result-browser">
-      ${renderResultGroupNav(sections, payload)}
       <div class="result-main">
         ${renderResultTabs(sections, payload)}
         <div class="result-panel-stack">
