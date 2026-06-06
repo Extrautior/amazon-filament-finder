@@ -143,7 +143,20 @@ function isBundleItem(item) {
   const packCount = Number(item?.packCount || 1);
   const totalKg = Number(item?.totalKg || 1);
   const spoolKg = Number(item?.spoolKg || 1);
-  return packCount > 1 || totalKg > spoolKg || /\b(?:bundle|multi\s?pack|\d+\s?pack|\d+\s*x\s*1\s?kg)\b/i.test(String(item?.title || ""));
+  const totalValue = Number(item?.totalValue);
+  const pricePerKg = Number(item?.pricePerKg);
+  const derivedKg = Number.isFinite(totalValue) && Number.isFinite(pricePerKg) && pricePerKg > 0
+    ? totalValue / pricePerKg
+    : totalKg;
+  const title = String(item?.title || "");
+  const explicitMultiSpool = /\b(?:multi\s?pack|\d+\s?pack|\d+\s*(?:x|×)\s*(?:1\s?)?kg|\d+\s+spools?)\b/i.test(title);
+
+  return (
+    derivedKg >= 1.5 ||
+    totalKg >= 1.5 ||
+    (packCount >= 2 && totalKg > spoolKg) ||
+    (explicitMultiSpool && (derivedKg > 1.15 || totalKg > 1.15 || packCount >= 2))
+  );
 }
 
 function sortByPrice(left, right) {
