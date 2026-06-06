@@ -42,6 +42,18 @@ let resultFetchPending = false;
 
 const app = document.getElementById("app");
 
+window.addEventListener("click", (event) => {
+  if (!(event.target instanceof Element)) {
+    return;
+  }
+  const pageButton = event.target.closest("[data-page]");
+  if (!pageButton || pageButton.disabled) {
+    return;
+  }
+  state.page += pageButton.dataset.page === "next" ? 1 : -1;
+  render();
+});
+
 function apiUrl(pathname) {
   const url = new URL(pathname, window.location.origin);
   url.searchParams.set("_ts", String(Date.now()));
@@ -282,6 +294,18 @@ function render() {
   bindEvents();
 }
 
+function refreshGalleryResults() {
+  const summary = app.querySelector("[data-results-summary]");
+  const results = app.querySelector("[data-gallery-results]");
+  if (summary) {
+    summary.textContent = currentResultsLabel();
+  }
+  if (results) {
+    results.innerHTML = productGrid();
+    bindGalleryResultEvents(results);
+  }
+}
+
 function desktopSidebar() {
   return `
     <aside class="side-shell">
@@ -326,7 +350,6 @@ function topBar() {
       <div class="top-actions">
         <button id="export-csv" type="button" ${state.exportEnabled ? "" : "disabled"} title="Export CSV"><span class="material-symbols-outlined">csv</span></button>
         <button id="export-json" type="button" ${state.exportEnabled ? "" : "disabled"} title="Export JSON"><span class="material-symbols-outlined">file_download</span></button>
-        <button id="run-search" class="primary-action" type="button">Search All</button>
         <button id="logout-button" type="button" title="Log out"><span class="material-symbols-outlined">logout</span></button>
       </div>
     </header>
@@ -372,15 +395,6 @@ function galleryView() {
           `).join("")}
         </div>
         <div class="filter-section">
-          <h3>Brand</h3>
-          <select><option>All Brands</option><option>Elegoo</option><option>Sunlu</option><option>Overture</option><option>Polymaker</option></select>
-        </div>
-        <div class="filter-section">
-          <div class="range-label"><h3>Price Range</h3><span>$12 - $35</span></div>
-          <div class="range-track"><span></span><i></i><b></b></div>
-          <div class="range-inputs"><input value="$12.00" readonly /><input value="$35.00" readonly /></div>
-        </div>
-        <div class="filter-section">
           <h3>Colors</h3>
           <div class="color-filter-row">
             ${["all", "white", "black", "gray", "red", "blue", "green", "yellow", "orange", "multi", "transparent"].map((color) => `
@@ -393,7 +407,7 @@ function galleryView() {
         <div class="gallery-head">
           <div>
             <h1>Filament Deals</h1>
-            <p>${escapeHtml(currentResultsLabel())}</p>
+            <p data-results-summary>${escapeHtml(currentResultsLabel())}</p>
           </div>
           <label class="sort-control">Sort by:
             <select id="sort-results">
@@ -409,7 +423,7 @@ function galleryView() {
           ${groupTab("bundles", "Bundles", groups.bundles)}
           ${groupTab("discounts", "Discounts", groups.discounts)}
         </div>
-        ${productGrid()}
+        <div data-gallery-results>${productGrid()}</div>
       </section>
     </div>
   `;
@@ -428,8 +442,15 @@ function productGrid() {
     return `<div class="empty-state"><h2>No matching filament deals</h2><p>Try another material or result group.</p></div>`;
   }
   return `
+    ${page.pageCount > 1 ? pagerControls(page, "top-pager") : ""}
     <div class="product-grid">${page.items.map(productCard).join("")}</div>
-    <div class="pager">
+    ${pagerControls(page)}
+  `;
+}
+
+function pagerControls(page, extraClass = "") {
+  return `
+    <div class="pager ${extraClass}">
       <span>Showing ${(page.page - 1) * state.pageSize + 1} to ${(page.page - 1) * state.pageSize + page.items.length} of ${page.total}</span>
       <div>
         <button type="button" data-page="prev" ${page.page <= 1 ? "disabled" : ""}><span class="material-symbols-outlined">chevron_left</span></button>
@@ -613,8 +634,8 @@ function bindEvents() {
   app.querySelector("#result-filter-term")?.addEventListener("input", (event) => {
     state.resultQuery = event.target.value || "";
     state.page = 1;
-    if (state.activeView !== "scrape") {
-      render();
+    if (state.activeView === "gallery") {
+      refreshGalleryResults();
     }
   });
 
@@ -625,10 +646,6 @@ function bindEvents() {
   });
 
   app.querySelector("#scrape-all-materials")?.addEventListener("click", () => {
-    void startSearch({ materials: MATERIALS });
-  });
-
-  app.querySelector("#run-search")?.addEventListener("click", () => {
     void startSearch({ materials: MATERIALS });
   });
 
@@ -688,14 +705,22 @@ function bindEvents() {
     render();
   });
 
-  for (const button of app.querySelectorAll("[data-page]")) {
-    button.addEventListener("click", () => {
+  bindGalleryResultEvents(app);
+}
+
+function bindGalleryResultEvents(root) {
+  for (const button of root.querySelectorAll("[data-page]")) {
+    button.addEventListener("click", (event) => {
+      if (button.disabled) {
+        return;
+      }
+      event.stopPropagation();
       state.page += button.dataset.page === "next" ? 1 : -1;
       render();
     });
   }
 
-  for (const button of app.querySelectorAll("[data-history-job-id]")) {
+  for (const button of root.querySelectorAll("[data-history-job-id]")) {
     button.addEventListener("click", () => {
       void loadLatestResults(button.dataset.historyJobId);
     });

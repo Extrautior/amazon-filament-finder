@@ -314,8 +314,7 @@ a {
   margin-top: 30px;
 }
 
-.filter-section h3,
-.range-label h3 {
+.filter-section h3 {
   margin: 0 0 14px;
   color: var(--muted);
   font-family: var(--mono);
@@ -369,7 +368,6 @@ a {
   font-style: normal;
 }
 
-.filter-section select,
 .sort-control select {
   min-height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.11);
@@ -377,75 +375,6 @@ a {
   background: rgba(6, 14, 32, 0.7);
   color: var(--text);
   padding: 0 12px;
-}
-
-.filter-section select {
-  width: 100%;
-}
-
-.range-label {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-
-.range-label span {
-  color: var(--primary);
-  font-family: var(--mono);
-  font-size: 0.78rem;
-}
-
-.range-track {
-  position: relative;
-  height: 10px;
-  margin: 18px 0 20px;
-  border-radius: 999px;
-  background: rgba(49, 57, 77, 0.7);
-}
-
-.range-track span {
-  position: absolute;
-  inset: 0 38% 0 20%;
-  border-radius: inherit;
-  background: var(--primary);
-}
-
-.range-track i,
-.range-track b {
-  position: absolute;
-  top: 50%;
-  width: 22px;
-  height: 22px;
-  border: 2px solid rgba(142, 213, 255, 0.7);
-  border-radius: 999px;
-  background: white;
-  transform: translate(-50%, -50%);
-}
-
-.range-track i {
-  left: 20%;
-}
-
-.range-track b {
-  left: 62%;
-}
-
-.range-inputs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.range-inputs input {
-  min-width: 0;
-  min-height: 36px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  background: rgba(6, 14, 32, 0.74);
-  color: var(--text);
-  text-align: center;
-  font-family: var(--mono);
 }
 
 .color-filter-row {
@@ -590,7 +519,6 @@ a {
   height: 100%;
   object-fit: contain;
   padding: 14px;
-  mix-blend-mode: luminosity;
 }
 
 .deal-badge {
@@ -747,6 +675,10 @@ a {
   font-size: 0.82rem;
 }
 
+.top-pager {
+  margin: 0 0 18px;
+}
+
 .pager div {
   display: flex;
   gap: 12px;
@@ -755,13 +687,21 @@ a {
 
 .pager button {
   display: grid;
+  flex: 0 0 36px;
   width: 36px;
   height: 36px;
   place-items: center;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   background: var(--surface-high);
   color: var(--primary);
+}
+
+.pager button .material-symbols-outlined {
+  width: 1em;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .scrape-stage {
@@ -1272,7 +1212,6 @@ button.history-row:hover {
   .card-media img {
     object-fit: cover;
     padding: 0;
-    opacity: 0.82;
   }
 
   .spool-fallback {
