@@ -1,186 +1,41 @@
-const button = document.getElementById("run-search");
-const logoutButton = document.getElementById("logout-button");
-const loginForm = document.getElementById("login-form");
-const passwordInput = document.getElementById("password");
-const statusEl = document.getElementById("status");
-const resultsEl = document.getElementById("results");
-const resultsShellEl = document.getElementById("results-shell");
-const floatingResultsNavEl = document.getElementById("floating-results-nav");
-const floatingColorNavEl = document.getElementById("floating-color-nav");
-const warningsEl = document.getElementById("warnings");
-const metaEl = document.getElementById("meta");
-const searchedAtEl = document.getElementById("searched-at");
-const marketplaceEl = document.getElementById("marketplace");
-const sessionStateEl = document.getElementById("session-state");
-const cheapestCountEl = document.getElementById("cheapest-count");
-const discountCountEl = document.getElementById("discount-count");
-const historyEl = document.getElementById("history");
-const historyListEl = document.getElementById("history-list");
-const exportCsvButton = document.getElementById("export-csv");
-const exportJsonButton = document.getElementById("export-json");
-const progressCardEl = document.getElementById("progress-card");
-const progressFillEl = document.getElementById("progress-fill");
-const progressLabelEl = document.getElementById("progress-label");
-const progressPercentEl = document.getElementById("progress-percent");
-const progressMetaEl = document.getElementById("progress-meta");
-const customSearchForm = document.getElementById("custom-search-form");
-const customSearchInput = document.getElementById("custom-search-term");
-const materialButtons = [...document.querySelectorAll(".material-search")];
-const mobileSearchAllButton = document.getElementById("mobile-search-all");
-
-let searchProgressTimer = null;
-let activeSearchJobId = null;
-let resultFetchPending = false;
-let selectedHistoryJobId = null;
-let currentResultIndex = 0;
-let floatingMenusEnabled = false;
-let floatingResultsNavScrollTop = 0;
-let floatingColorNavScrollTop = 0;
-let activeResultMaterial = "";
-let activeResultGroup = "cheapest";
+const MATERIALS = ["PLA", "PETG", "ABS", "TPU", "ASA"];
 
 const COLOR_DEFINITIONS = [
-  {
-    key: "black",
-    label: "Black",
-    pattern: /\bblack\b|\bjet\s+black\b|\bcharcoal\b|\bonyx\b/i,
-    shades: [
-      { key: "jet-black", label: "Jet Black", pattern: /\bjet\s+black\b/i },
-      { key: "matte-black", label: "Matte Black", pattern: /\bmatte\s+black\b/i },
-      { key: "charcoal-black", label: "Charcoal Black", pattern: /\bcharcoal\b/i }
-    ]
-  },
-  {
-    key: "white",
-    label: "White",
-    pattern: /\bwhite\b|\bivory\b|\bcream\b/i,
-    shades: [
-      { key: "cool-white", label: "Cool White", pattern: /\bcool\s+white\b/i },
-      { key: "warm-white", label: "Warm White", pattern: /\bwarm\s+white\b/i },
-      { key: "ivory-white", label: "Ivory White", pattern: /\bivory\b/i }
-    ]
-  },
-  {
-    key: "gray",
-    label: "Gray",
-    pattern: /\bgray\b|\bgrey\b|\bsilver\b|\bspace\s+gray\b/i,
-    shades: [
-      { key: "light-gray", label: "Light Gray", pattern: /\blight\s+gr[ae]y\b/i },
-      { key: "dark-gray", label: "Dark Gray", pattern: /\bdark\s+gr[ae]y\b/i },
-      { key: "space-gray", label: "Space Gray", pattern: /\bspace\s+gr[ae]y\b/i },
-      { key: "silver-gray", label: "Silver Gray", pattern: /\bsilver\b/i }
-    ]
-  },
-  {
-    key: "blue",
-    label: "Blue",
-    pattern: /\bblue\b|\bnavy\b|\bsapphire\b|\bcyan\b|\bteal\b|\bsky\s+blue\b/i,
-    shades: [
-      { key: "light-blue", label: "Light Blue", pattern: /\blight\s+blue\b|\bsky\s+blue\b|\bbaby\s+blue\b/i },
-      { key: "dark-blue", label: "Dark Blue", pattern: /\bdark\s+blue\b/i },
-      { key: "navy-blue", label: "Navy Blue", pattern: /\bnavy\b/i },
-      { key: "royal-blue", label: "Royal Blue", pattern: /\broyal\s+blue\b/i },
-      { key: "teal-blue", label: "Teal Blue", pattern: /\bteal\b|\bcyan\b/i }
-    ]
-  },
-  {
-    key: "green",
-    label: "Green",
-    pattern: /\bgreen\b|\bolive\b|\bemerald\b|\bmint\b|\bforest\b|\blime\b/i,
-    shades: [
-      { key: "olive-green", label: "Olive Green", pattern: /\bolive\b|\barmy\s+green\b/i },
-      { key: "light-green", label: "Light Green", pattern: /\blight\s+green\b|\bpastel\s+green\b/i },
-      { key: "dark-green", label: "Dark Green", pattern: /\bdark\s+green\b|\bdeep\s+green\b/i },
-      { key: "forest-green", label: "Forest Green", pattern: /\bforest\b|\bhunter\s+green\b/i },
-      { key: "mint-green", label: "Mint Green", pattern: /\bmint\b/i },
-      { key: "lime-green", label: "Lime Green", pattern: /\blime\b|\bneon\s+green\b/i },
-      { key: "emerald-green", label: "Emerald Green", pattern: /\bemerald\b/i }
-    ]
-  },
-  {
-    key: "red",
-    label: "Red",
-    pattern: /\bred\b|\bmaroon\b|\bcrimson\b|\bburgundy\b/i,
-    shades: [
-      { key: "light-red", label: "Light Red", pattern: /\blight\s+red\b/i },
-      { key: "dark-red", label: "Dark Red", pattern: /\bdark\s+red\b/i },
-      { key: "crimson-red", label: "Crimson Red", pattern: /\bcrimson\b/i },
-      { key: "burgundy-red", label: "Burgundy Red", pattern: /\bburgundy\b|\bmaroon\b/i }
-    ]
-  },
-  {
-    key: "yellow",
-    label: "Yellow",
-    pattern: /\byellow\b|\bgold\b|\bamber\b/i,
-    shades: [
-      { key: "light-yellow", label: "Light Yellow", pattern: /\blight\s+yellow\b/i },
-      { key: "dark-yellow", label: "Dark Yellow", pattern: /\bdark\s+yellow\b|\bmustard\b/i },
-      { key: "gold-yellow", label: "Gold", pattern: /\bgold\b/i },
-      { key: "amber-yellow", label: "Amber", pattern: /\bamber\b/i }
-    ]
-  },
-  {
-    key: "orange",
-    label: "Orange",
-    pattern: /\borange\b|\bcopper\b/i,
-    shades: [
-      { key: "light-orange", label: "Light Orange", pattern: /\blight\s+orange\b|\bpeach\b/i },
-      { key: "dark-orange", label: "Dark Orange", pattern: /\bdark\s+orange\b|\bburnt\s+orange\b/i },
-      { key: "copper-orange", label: "Copper", pattern: /\bcopper\b/i }
-    ]
-  },
-  {
-    key: "purple",
-    label: "Purple",
-    pattern: /\bpurple\b|\bviolet\b|\blavender\b/i,
-    shades: [
-      { key: "light-purple", label: "Light Purple", pattern: /\blight\s+purple\b|\blavender\b/i },
-      { key: "dark-purple", label: "Dark Purple", pattern: /\bdark\s+purple\b|\bdeep\s+purple\b/i },
-      { key: "violet-purple", label: "Violet", pattern: /\bviolet\b/i }
-    ]
-  },
-  {
-    key: "pink",
-    label: "Pink",
-    pattern: /\bpink\b|\brose\b/i,
-    shades: [
-      { key: "light-pink", label: "Light Pink", pattern: /\blight\s+pink\b|\bpastel\s+pink\b/i },
-      { key: "dark-pink", label: "Dark Pink", pattern: /\bdark\s+pink\b|\bhot\s+pink\b/i },
-      { key: "rose-pink", label: "Rose Pink", pattern: /\brose\b/i }
-    ]
-  },
-  {
-    key: "brown",
-    label: "Brown",
-    pattern: /\bbrown\b|\bbronze\b|\bwood\b|\bchocolate\b/i,
-    shades: [
-      { key: "light-brown", label: "Light Brown", pattern: /\blight\s+brown\b|\btan\b/i },
-      { key: "dark-brown", label: "Dark Brown", pattern: /\bdark\s+brown\b|\bchocolate\b/i },
-      { key: "wood-brown", label: "Wood Brown", pattern: /\bwood\b/i },
-      { key: "bronze-brown", label: "Bronze Brown", pattern: /\bbronze\b/i }
-    ]
-  },
-  {
-    key: "transparent",
-    label: "Transparent",
-    pattern: /\bclear\b|\btransparent\b|\btranslucent\b/i,
-    shades: [
-      { key: "clear-transparent", label: "Clear", pattern: /\bclear\b/i },
-      { key: "frosted-transparent", label: "Frosted", pattern: /\bfrosted\b|\btranslucent\b/i }
-    ]
-  },
-  {
-    key: "multi-color",
-    label: "Multi-Color",
-    pattern: /\brainbow\b|\bmulti(?:-|\s)?color\b|\bmulti(?:-|\s)?colour\b|\bgalaxy\b|\bdual\s+color\b|\btri(?:-|\s)?color\b/i,
-    shades: [
-      { key: "rainbow-multi", label: "Rainbow", pattern: /\brainbow\b/i },
-      { key: "galaxy-multi", label: "Galaxy", pattern: /\bgalaxy\b/i },
-      { key: "dual-color-multi", label: "Dual Color", pattern: /\bdual\s+color\b/i },
-      { key: "tri-color-multi", label: "Tri-Color", pattern: /\btri(?:-|\s)?color\b/i }
-    ]
-  }
+  { key: "black", label: "Black", pattern: /\bblack\b|\bjet\s+black\b|\bcharcoal\b|\bonyx\b/i },
+  { key: "white", label: "White", pattern: /\bwhite\b|\bivory\b|\bcream\b/i },
+  { key: "gray", label: "Gray", pattern: /\bgray\b|\bgrey\b|\bsilver\b|\bspace\s+gray\b/i },
+  { key: "blue", label: "Blue", pattern: /\bblue\b|\bnavy\b|\bsapphire\b|\bcyan\b|\bteal\b|\bsky\s+blue\b/i },
+  { key: "green", label: "Green", pattern: /\bgreen\b|\bolive\b|\bemerald\b|\bmint\b|\bforest\b|\blime\b/i },
+  { key: "red", label: "Red", pattern: /\bred\b|\bmaroon\b|\bcrimson\b|\bburgundy\b/i },
+  { key: "yellow", label: "Yellow", pattern: /\byellow\b|\bgold\b|\bamber\b/i },
+  { key: "orange", label: "Orange", pattern: /\borange\b|\bcopper\b/i },
+  { key: "purple", label: "Purple", pattern: /\bpurple\b|\bviolet\b|\blavender\b/i },
+  { key: "pink", label: "Pink", pattern: /\bpink\b|\brose\b/i },
+  { key: "brown", label: "Brown", pattern: /\bbrown\b|\bbronze\b|\bwood\b|\bchocolate\b/i },
+  { key: "transparent", label: "Clear", pattern: /\bclear\b|\btransparent\b|\btranslucent\b/i },
+  { key: "multi", label: "Multi", pattern: /\brainbow\b|\bmulti(?:-|\s)?color\b|\bgalaxy\b|\bdual\s+color\b|\btri(?:-|\s)?color\b/i }
 ];
+
+const state = {
+  activeView: "scrape",
+  activeMaterial: "all",
+  activeGroup: "deals",
+  authenticated: false,
+  exportEnabled: false,
+  history: [],
+  payload: null,
+  progress: null,
+  status: "Ready.",
+  warnings: [],
+  searching: false,
+  selectedHistoryJobId: null
+};
+
+let progressTimer = null;
+let activeSearchJobId = null;
+let resultFetchPending = false;
+
+const app = document.getElementById("app");
 
 function apiUrl(pathname) {
   const url = new URL(pathname, window.location.origin);
@@ -189,36 +44,40 @@ function apiUrl(pathname) {
 }
 
 async function apiFetch(pathname, options = {}) {
-  const headers = {
-    Accept: "application/json",
-    ...(options.headers || {})
-  };
-
   return fetch(apiUrl(pathname), {
     cache: "no-store",
     credentials: "include",
     ...options,
-    headers
+    headers: {
+      Accept: "application/json",
+      ...(options.headers || {})
+    }
   });
 }
 
-function money(value, currency) {
-  if (value == null) {
-    return "N/A";
+async function readJsonResponse(response) {
+  const text = await response.text();
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    throw new Error("The server returned an unexpected non-JSON response.");
   }
-  const prefixCurrencies = new Set(["$", "€", "£", "₪"]);
-  if (prefixCurrencies.has(currency)) {
-    return `${currency}${value.toFixed(2)}`;
-  }
-  return `${value.toFixed(2)} ${currency}`;
+  return JSON.parse(text);
 }
 
 function escapeHtml(value) {
-  return String(value)
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function money(value, currency = "$") {
+  if (value == null || Number.isNaN(Number(value))) {
+    return "N/A";
+  }
+  const amount = Number(value).toFixed(2);
+  return ["$", "€", "£", "₪"].includes(currency) ? `${currency}${amount}` : `${amount} ${currency}`;
 }
 
 function slugify(value) {
@@ -226,981 +85,643 @@ function slugify(value) {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "group";
+    .replace(/^-+|-+$/g, "") || "item";
 }
 
 function safeAmazonUrl(value) {
   try {
-    const normalized = String(value || "").trim();
-    const url = new URL(normalized, "https://www.amazon.com");
+    const url = new URL(String(value || "").trim(), "https://www.amazon.com");
     const asinMatch = url.pathname.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i);
     if (asinMatch) {
       return `https://www.amazon.com/dp/${asinMatch[1].toUpperCase()}`;
     }
-    if (!/amazon\./i.test(url.hostname)) {
-      return "https://www.amazon.com";
-    }
-    return url.toString();
+    return /amazon\./i.test(url.hostname) ? url.toString() : "https://www.amazon.com";
   } catch {
     return "https://www.amazon.com";
   }
 }
 
-function shortNote(note) {
-  const cleaned = (note || "").replace(/\s+/g, " ").trim();
-  if (!cleaned) {
-    return "Free shipping listing";
+function safeImageUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    return /^https?:$/i.test(url.protocol) ? url.toString() : "";
+  } catch {
+    return "";
   }
-  return cleaned.length > 140 ? `${cleaned.slice(0, 137)}...` : cleaned;
 }
 
-function freeShippingLabel(item) {
-  if (item.freeShippingKind === "threshold" && item.minimumFreeShippingQuantity) {
-    return `Free at qty ${item.minimumFreeShippingQuantity}`;
+function detectColorProfile(item) {
+  if (item?.colorKey || item?.colorLabel) {
+    return {
+      key: item.colorKey || slugify(item.colorLabel),
+      label: item.colorLabel || item.shadeLabel || "Color"
+    };
   }
-  if (item.freeShippingKind === "amazon-filter") {
-    return "Eligible";
-  }
-  return "Free shipping";
+
+  const title = String(item?.title || "");
+  const match = COLOR_DEFINITIONS.find((entry) => entry.pattern.test(title));
+  return match ? { key: match.key, label: match.label } : { key: "unknown", label: "Color" };
+}
+
+function detectBrand(item) {
+  const title = String(item?.title || "").trim();
+  const brands = ["Elegoo", "Sunlu", "Polymaker", "Overture", "Hatchbox", "eSUN", "Creality", "Bambu", "Anycubic", "Prusament"];
+  return brands.find((brand) => new RegExp(`\\b${brand}\\b`, "i").test(title)) || title.split(/\s+/)[0] || "Amazon";
+}
+
+function detectMaterial(item) {
+  const source = `${item?.material || ""} ${item?.title || ""}`;
+  return MATERIALS.find((material) => new RegExp(`\\b${material}\\+?\\b`, "i").test(source)) || item?.material || "PLA";
 }
 
 function isBundleItem(item) {
   const packCount = Number(item?.packCount || 1);
   const totalKg = Number(item?.totalKg || 1);
   const spoolKg = Number(item?.spoolKg || 1);
-  const title = String(item?.title || "");
-
-  return (
-    packCount > 1 ||
-    totalKg > spoolKg ||
-    /\b(?:bundle|multi\s?pack|\d+\s?pack|\d+\s*x\s*1\s?kg|\d+\s?kg\s+bundle)\b/i.test(title)
-  );
+  return packCount > 1 || totalKg > spoolKg || /\b(?:bundle|multi\s?pack|\d+\s?pack|\d+\s*x\s*1\s?kg)\b/i.test(String(item?.title || ""));
 }
 
-function thresholdNote(item) {
-  if (item.freeShippingKind !== "threshold") {
-    return "";
-  }
-
-  const parts = [];
-  if (item.minimumFreeShippingQuantity) {
-    parts.push(`Minimum quantity ${item.minimumFreeShippingQuantity}`);
-  }
-  if (item.freeShippingSubtotal != null) {
-    parts.push(`subtotal ${money(item.freeShippingSubtotal, item.currency)}`);
-  }
-  if (item.shippingAtQuantityOne != null) {
-    parts.push(`qty 1 shipping ${money(item.shippingAtQuantityOne, item.currency)}`);
-  }
-  return parts.join(" · ");
+function sortByPrice(left, right) {
+  return (left.pricePerKg ?? Number.POSITIVE_INFINITY) - (right.pricePerKg ?? Number.POSITIVE_INFINITY);
 }
 
-function safeImageUrl(value) {
-  try {
-    const url = new URL(String(value || "").trim());
-    if (/^https?:$/i.test(url.protocol)) {
-      return url.toString();
-    }
-    return "";
-  } catch {
-    return "";
+function allDealItems() {
+  if (!state.payload?.resultsByMaterial) {
+    return [];
   }
+  return Object.entries(state.payload.resultsByMaterial)
+    .flatMap(([material, items]) => (items || []).map((item) => ({ ...item, material })))
+    .sort(sortByPrice);
 }
 
-function setExportEnabled(enabled) {
-  exportCsvButton.disabled = !enabled;
-  exportJsonButton.disabled = !enabled;
+function discountedItems() {
+  if (!state.payload?.discountedResultsByMaterial) {
+    return [];
+  }
+  return Object.entries(state.payload.discountedResultsByMaterial)
+    .flatMap(([material, items]) => (items || []).map((item) => ({ ...item, material })))
+    .sort(sortByPrice);
 }
 
-function setLockedState(locked) {
-  button.disabled = locked;
-  if (mobileSearchAllButton) {
-    mobileSearchAllButton.disabled = locked;
+function visibleItems() {
+  let items = state.activeGroup === "discounts"
+    ? discountedItems()
+    : state.activeGroup === "bundles"
+      ? allDealItems().filter(isBundleItem)
+      : allDealItems();
+
+  if (state.activeMaterial !== "all") {
+    items = items.filter((item) => detectMaterial(item).toUpperCase() === state.activeMaterial);
   }
-  for (const materialButton of materialButtons) {
-    materialButton.disabled = locked;
-  }
-  customSearchInput.disabled = locked;
-  customSearchForm.querySelector("button").disabled = locked;
-  exportCsvButton.disabled = locked || exportCsvButton.disabled;
-  exportJsonButton.disabled = locked || exportJsonButton.disabled;
+  return items;
 }
 
-function stopSearchProgressPolling() {
-  if (searchProgressTimer) {
-    window.clearInterval(searchProgressTimer);
-    searchProgressTimer = null;
+function materialCounts() {
+  const counts = Object.fromEntries(MATERIALS.map((material) => [material, 0]));
+  for (const [material, items] of Object.entries(state.payload?.resultsByMaterial || {})) {
+    counts[material] = items.length;
   }
+  return counts;
 }
 
-function renderSearchProgress(payload) {
-  const percent = Math.max(0, Math.min(100, Number(payload.percent) || 0));
-  if (!payload.running && payload.phase !== "error") {
-    progressCardEl.hidden = true;
-    return;
-  }
-
-  progressCardEl.hidden = false;
-  progressFillEl.style.width = `${percent}%`;
-  progressPercentEl.textContent = `${Math.round(percent)}%`;
-  progressLabelEl.textContent = payload.message || "Searching Amazon…";
-  progressMetaEl.textContent = payload.activeMaterial
-    ? `Currently working on ${payload.activeMaterial}.`
-    : payload.running
-      ? "Search is still active."
-      : payload.phase === "complete"
-        ? "The latest search finished."
-        : "Waiting for the next search.";
-}
-
-async function readJsonResponse(response) {
-  const contentType = response.headers.get("content-type") || "";
-  const text = await response.text();
-  if (!contentType.includes("application/json")) {
-    throw new Error("The server returned an unexpected non-JSON response.");
-  }
-  return JSON.parse(text);
-}
-
-function openDownload(url) {
-  window.location.assign(url);
-}
-
-function compareResultPrices(left, right) {
-  const leftMissingPrice = left.priceValue == null ? 1 : 0;
-  const rightMissingPrice = right.priceValue == null ? 1 : 0;
-  if (leftMissingPrice !== rightMissingPrice) {
-    return leftMissingPrice - rightMissingPrice;
-  }
-  if (left.pricePerKg !== right.pricePerKg) {
-    return (left.pricePerKg ?? Number.POSITIVE_INFINITY) - (right.pricePerKg ?? Number.POSITIVE_INFINITY);
-  }
-  if (left.priceValue !== right.priceValue) {
-    return (left.priceValue ?? Number.POSITIVE_INFINITY) - (right.priceValue ?? Number.POSITIVE_INFINITY);
-  }
-  if (left.totalValue !== right.totalValue) {
-    return (left.totalValue ?? Number.POSITIVE_INFINITY) - (right.totalValue ?? Number.POSITIVE_INFINITY);
-  }
-  return String(left.title || "").localeCompare(String(right.title || ""));
-}
-
-function detectColorProfile(item) {
-  if (item && item.colorLabel && item.shadeLabel) {
-    return {
-      colorKey: item.colorKey || slugify(item.colorLabel),
-      colorLabel: item.colorLabel,
-      shadeKey: item.shadeKey || slugify(item.shadeLabel),
-      shadeLabel: item.shadeLabel
-    };
-  }
-
-  const normalizedTitle = String(item?.title || "").trim();
-  for (const colorDefinition of COLOR_DEFINITIONS) {
-    if (!colorDefinition.pattern.test(normalizedTitle)) {
-      continue;
-    }
-
-    const shade = colorDefinition.shades.find((entry) => entry.pattern.test(normalizedTitle));
-    return {
-      colorKey: colorDefinition.key,
-      colorLabel: colorDefinition.label,
-      shadeKey: shade ? shade.key : colorDefinition.key,
-      shadeLabel: shade ? shade.label : colorDefinition.label
-    };
-  }
-
+function groupCounts() {
   return {
-    colorKey: "other-colors",
-    colorLabel: "Other Colors",
-    shadeKey: "other-colors",
-    shadeLabel: "Other Colors"
+    deals: allDealItems().length,
+    bundles: allDealItems().filter(isBundleItem).length,
+    discounts: discountedItems().length
   };
 }
 
-function compareColorLabels(leftLabel, rightLabel) {
-  const leftIndex = COLOR_DEFINITIONS.findIndex((entry) => entry.label === leftLabel);
-  const rightIndex = COLOR_DEFINITIONS.findIndex((entry) => entry.label === rightLabel);
-
-  if (leftLabel === "Other Colors") {
-    return 1;
+function currentResultsLabel() {
+  if (!state.payload) {
+    return "No cached results";
   }
-  if (rightLabel === "Other Colors") {
-    return -1;
-  }
-  if (leftIndex !== -1 && rightIndex !== -1) {
-    return leftIndex - rightIndex;
-  }
-  return leftLabel.localeCompare(rightLabel);
+  const count = visibleItems().length;
+  const material = state.activeMaterial === "all" ? "all materials" : state.activeMaterial;
+  return `Showing ${count} results for ${material}`;
 }
 
-function buildShadeGroups(items) {
-  const buckets = new Map();
-  for (const item of items) {
-    const profile = detectColorProfile(item);
-    const shadeKey = profile.shadeKey || profile.colorKey;
-    if (!buckets.has(shadeKey)) {
-      buckets.set(shadeKey, {
-        key: shadeKey,
-        label: profile.shadeLabel,
-        items: []
-      });
-    }
-    buckets.get(shadeKey).items.push(item);
-  }
-
-  return [...buckets.values()]
-    .map((group) => ({
-      ...group,
-      items: [...group.items].sort(compareResultPrices)
-    }))
-    .sort((left, right) => {
-      const leftCheapest = left.items[0];
-      const rightCheapest = right.items[0];
-      if (!leftCheapest || !rightCheapest) {
-        return left.label.localeCompare(right.label);
-      }
-      return compareResultPrices(leftCheapest, rightCheapest);
-    });
+function render() {
+  app.className = `app-shell view-${state.activeView}`;
+  app.innerHTML = `
+    ${desktopSidebar()}
+    <main class="workspace">
+      ${topBar()}
+      <section class="view-stage">
+        ${state.activeView === "gallery" ? galleryView() : ""}
+        ${state.activeView === "scrape" ? scrapeView() : ""}
+        ${state.activeView === "history" ? historyView() : ""}
+      </section>
+    </main>
+    ${mobileBottomNav()}
+    ${loginDialog()}
+  `;
+  bindEvents();
 }
 
-function groupItemsByColor(items) {
-  const buckets = new Map();
-  for (const item of items) {
-    const profile = detectColorProfile(item);
-    const colorLabel = profile.colorLabel;
-    if (!buckets.has(colorLabel)) {
-      buckets.set(colorLabel, []);
-    }
-    buckets.get(colorLabel).push(item);
-  }
-
-  return [...buckets.entries()]
-    .sort(([leftLabel], [rightLabel]) => {
-      return compareColorLabels(leftLabel, rightLabel);
-    })
-    .map(([label, groupedItems]) => ({
-      label,
-      items: [...groupedItems].sort(compareResultPrices),
-      shades: buildShadeGroups(groupedItems)
-    }));
-}
-
-function summarizeHistoryItem(item) {
-  const labels = Array.isArray(item.labels) && item.labels.length ? item.labels.join(", ") : "Search";
-  const searchedAt = item.searchedAt ? new Date(item.searchedAt).toLocaleString() : "Unknown time";
-  return `${labels} · ${item.resultCount} cheapest · ${item.discountedCount} discounted · ${searchedAt}`;
-}
-
-function renderHistory(items) {
-  if (!Array.isArray(items) || !items.length) {
-    historyEl.hidden = true;
-    historyListEl.innerHTML = "";
-    return;
-  }
-
-  historyEl.hidden = false;
-  historyListEl.innerHTML = items.map((item) => `
-    <button class="history-item${item.jobId === selectedHistoryJobId ? " active" : ""}" type="button" data-history-job-id="${escapeHtml(item.jobId)}">
-      <strong>${escapeHtml(Array.isArray(item.labels) && item.labels.length ? item.labels.join(", ") : "Saved search")}</strong>
-      <span>${escapeHtml(summarizeHistoryItem(item))}</span>
-    </button>
-  `).join("");
-
-  for (const historyButton of historyListEl.querySelectorAll("[data-history-job-id]")) {
-    historyButton.addEventListener("click", () => {
-      const { historyJobId } = historyButton.dataset;
-      if (historyJobId) {
-        void loadLatestResults(historyJobId);
-      }
-    });
-  }
-}
-
-function cardForResult(item, index) {
-  const amazonUrl = safeAmazonUrl(item.url);
-  const imageUrl = safeImageUrl(item.imageUrl);
-  const colorProfile = detectColorProfile(item);
-  const isBundle = isBundleItem(item);
+function desktopSidebar() {
   return `
-    <article class="product-card${isBundle ? " bundle-card" : ""}" data-shade-label="${escapeHtml(colorProfile.shadeLabel)}">
-      <div class="product-media">
-        <span class="product-placeholder material-symbols-outlined" aria-hidden="true">deployed_code</span>
-        ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.remove()" />` : ""}
-        <div class="product-badges">
-          <span>${escapeHtml(freeShippingLabel(item))}</span>
-          ${isBundle ? `<span>Bundle</span>` : ""}
-          ${item.hasDiscount ? `<span>${escapeHtml(item.discountPercent != null ? `Save ${item.discountPercent}%` : "Deal")}</span>` : ""}
-        </div>
-      </div>
-      <div class="product-body">
-        <div class="product-title-row">
-          <h3><a href="${escapeHtml(amazonUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.title)}</a></h3>
-          <span class="result-rank">#${index + 1}</span>
-        </div>
-        <div class="product-color">
-          <span class="color-dot" data-color-key="${escapeHtml(colorProfile.colorKey)}"></span>
-          <span>${escapeHtml(colorProfile.shadeLabel)}</span>
-        </div>
-        ${thresholdNote(item) ? `<p class="result-note">${escapeHtml(thresholdNote(item))}</p>` : ""}
-        <div class="product-price-row">
-          <div>
-            <strong>${money(item.pricePerKg, item.currency)}</strong>
-            <span>per kg</span>
-          </div>
-          <div>
-            <strong>${money(item.totalValue, item.currency)}</strong>
-            <span>delivered</span>
-          </div>
-        </div>
-        <dl class="product-facts">
-          <div><dt>Item</dt><dd>${money(item.priceValue, item.currency)}</dd></div>
-          <div><dt>Shipping</dt><dd>${money(item.shippingValue, item.currency)}</dd></div>
-          <div><dt>Import</dt><dd>${money(item.importFeesValue, item.currency)}</dd></div>
-          <div><dt>Spools</dt><dd>${escapeHtml(item.packCount || 1)} x ${escapeHtml(item.spoolKg || 1)}kg</dd></div>
-        </dl>
-        <a class="open-link" href="${escapeHtml(amazonUrl)}" target="_blank" rel="noreferrer">
-          <span>Open on Amazon</span>
-          <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
-        </a>
-      </div>
-    </article>
-  `;
-}
-
-function gridClassName(itemCount, extraClassName = "") {
-  const layoutClass = itemCount >= 4 ? "result-grid-dense" : "result-grid-compact";
-  return ["result-grid", extraClassName, layoutClass].filter(Boolean).join(" ");
-}
-
-function sectionTitleLabel(section, suffix) {
-  return `${section.label} ${suffix}`;
-}
-
-function resultFeedHeader(section, items, title, kicker) {
-  const colorGroups = groupItemsByColor(items);
-  return `
-    <div class="feed-header">
-      <div>
-        <h2>${escapeHtml(title)}</h2>
-        <p>${escapeHtml(kicker)} · ${escapeHtml(section.label)} · ${items.length} result${items.length === 1 ? "" : "s"}</p>
-      </div>
-      <label class="feed-sort">
-        <span>Sort by</span>
-        <select>
-          <option>Price: Low to High</option>
-          <option>Price: High to Low</option>
-        </select>
-      </label>
-    </div>
-    ${colorGroups.length ? `
-      <div class="color-chip-row" aria-label="Color groups">
-        ${colorGroups.map((colorGroup) => `
-          <button class="color-chip" type="button">
-            <span class="color-dot" data-color-key="${escapeHtml(slugify(colorGroup.label))}"></span>
-            ${escapeHtml(colorGroup.label)}
-            <strong>${colorGroup.items.length}</strong>
-          </button>
-        `).join("")}
-      </div>
-    ` : ""}
-  `;
-}
-
-function sectionForMaterial(section, items) {
-  const cards = items.length
-    ? `<div class="${gridClassName(items.length)}">${items.map((item, index) => cardForResult(item, index)).join("")}</div>`
-    : `<p class="empty">No free-shipping ${escapeHtml(section.label)} results found.</p>`;
-
-  return `
-    <article class="result-panel" data-result-material="${escapeHtml(section.key || section.label)}" data-result-group="cheapest">
-      ${resultFeedHeader(section, items, "Available Filaments", "Cheapest by delivered price")}
-      ${cards}
-    </article>
-  `;
-}
-
-function bundleSectionForMaterial(section, items) {
-  const bundleItems = items
-    .filter(isBundleItem)
-    .slice()
-    .sort(compareResultPrices);
-  const cards = bundleItems.length
-    ? `<div class="${gridClassName(bundleItems.length, "bundle-grid")}">${bundleItems.map((item, index) => cardForResult(item, index)).join("")}</div>`
-    : `<p class="empty">No full-spool ${escapeHtml(section.label)} bundles found in this run.</p>`;
-
-  return `
-    <article class="result-panel" data-result-material="${escapeHtml(section.key || section.label)}" data-result-group="bundles">
-      ${resultFeedHeader(section, bundleItems, `${section.label} Bundles`, "Full spool multipacks")}
-      ${cards}
-    </article>
-  `;
-}
-
-function discountSectionForMaterial(section, items) {
-  const cards = items.length
-    ? `<div class="${gridClassName(items.length)}">${items.map((item, index) => cardForResult(item, index)).join("")}</div>`
-    : `<p class="empty">No discounted ${escapeHtml(section.label)} deals found.</p>`;
-
-  return `
-    <article class="result-panel" data-result-material="${escapeHtml(section.key || section.label)}" data-result-group="discounts">
-      ${resultFeedHeader(section, items, `${section.label} Discounted Deals`, "Discount signals")}
-      ${cards}
-    </article>
-  `;
-}
-function renderWarnings(warnings) {
-  const visibleWarnings = (warnings || []).filter(
-    (warning) => !/did not preserve the free-shipping filter/i.test(String(warning || ""))
-  );
-
-  if (!visibleWarnings.length) {
-    warningsEl.hidden = true;
-    warningsEl.innerHTML = "";
-    return;
-  }
-
-  warningsEl.hidden = false;
-  warningsEl.innerHTML = `
-    <button class="warning-summary" type="button" title="${escapeHtml(visibleWarnings.join(" | "))}">
-      <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-      <strong>${visibleWarnings.length} warning${visibleWarnings.length === 1 ? "" : "s"}</strong>
-      <span>${escapeHtml(String(visibleWarnings[0] || "").replace(/\s+/g, " ").slice(0, 140))}${String(visibleWarnings[0] || "").length > 140 ? "..." : ""}</span>
-    </button>
-  `;
-}
-
-function clearCurrentResultsForSearch(searchRequest = {}) {
-  document.body.classList.remove("has-results");
-  selectedHistoryJobId = null;
-  renderWarnings([]);
-  metaEl.hidden = true;
-  searchedAtEl.textContent = "";
-  marketplaceEl.textContent = "";
-  cheapestCountEl.textContent = "0";
-  discountCountEl.textContent = "0";
-  const labels = Array.isArray(searchRequest.materials) && searchRequest.materials.length
-    ? searchRequest.materials
-    : searchRequest.customTerm
-      ? [searchRequest.customTerm]
-      : ["PLA", "PETG", "ABS", "TPU", "ASA"];
-  resultsEl.innerHTML = `
-    <article class="result-panel is-active" data-result-material="${escapeHtml(labels[0] || "search")}" data-result-group="cheapest">
-      <div class="feed-header">
+    <aside class="side-shell">
+      <div class="brand-block">
+        <div class="brand-mark"><span class="material-symbols-outlined">3d_rotation</span></div>
         <div>
-          <h2>Available Filaments</h2>
-          <p>Searching ${labels.map(escapeHtml).join(", ")} now.</p>
+          <strong>FilamentScrape</strong>
+          <span>v2.1 Precision</span>
         </div>
       </div>
-      <p class="empty">Collecting fresh Amazon listings.</p>
-    </article>
-  `;
-  currentResultIndex = 0;
-  syncResultsCarousel();
-  setExportEnabled(false);
-}
-
-function resultSlideLabel(card, index) {
-  const title = card.querySelector(".feed-header h2")?.textContent?.trim();
-  return title || `Group ${index + 1}`;
-}
-
-function resultCards() {
-  return [...resultsEl.querySelectorAll(".result-panel")];
-}
-
-function currentResultCard() {
-  return resultCards()[currentResultIndex] || null;
-}
-
-function scrollViewportToResults() {
-  const shellTop = window.scrollY + resultsShellEl.getBoundingClientRect().top - 24;
-  window.scrollTo({
-    top: Math.max(0, shellTop),
-    behavior: "smooth"
-  });
-}
-
-function updateFloatingMenuVisibility() {
-  const hasResults = !resultsShellEl.hidden && resultCards().length > 0;
-  const shellRect = resultsShellEl.getBoundingClientRect();
-  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-  const historyRect = historyEl.hidden ? null : historyEl.getBoundingClientRect();
-  const historyThreshold = historyRect ? historyRect.bottom : 0;
-  const inView = hasResults && shellRect.top < viewportHeight - 120 && shellRect.bottom > 220;
-  const pastHistory = !historyRect || historyThreshold <= 120;
-  const enabled = Boolean(inView);
-
-  floatingMenusEnabled = enabled && pastHistory;
-  floatingResultsNavEl.classList.toggle("is-visible", floatingMenusEnabled && !floatingResultsNavEl.hidden);
-  floatingColorNavEl.classList.toggle("is-visible", floatingMenusEnabled && !floatingColorNavEl.hidden);
-}
-
-function renderFloatingResultsNav(cards) {
-  if (!cards.length) {
-    floatingResultsNavEl.hidden = true;
-    floatingResultsNavEl.innerHTML = "";
-    floatingResultsNavEl.classList.remove("is-visible");
-    floatingResultsNavScrollTop = 0;
-    return;
-  }
-
-  const previousList = floatingResultsNavEl.querySelector(".results-indicators-floating");
-  if (previousList) {
-    floatingResultsNavScrollTop = previousList.scrollTop;
-  }
-
-  floatingResultsNavEl.hidden = false;
-  floatingResultsNavEl.innerHTML = `
-    <div class="floating-panel-card">
-      <p class="toolbar-label">Result Navigator</p>
-      <h2>Browse Groups</h2>
-      <div class="results-indicators results-indicators-floating">
-        ${cards.map((card, index) => `
-          <button
-            class="results-indicator${index === currentResultIndex ? " active" : ""}"
-            type="button"
-            data-result-index="${index}"
-            aria-label="Open ${escapeHtml(resultSlideLabel(card, index))}"
-            title="${escapeHtml(resultSlideLabel(card, index))}"
-          >
-            <span class="results-indicator-index">${index + 1}</span>
-            <span class="results-indicator-label">${escapeHtml(resultSlideLabel(card, index))}</span>
-          </button>
-        `).join("")}
+      <button class="upgrade-button" type="button">Upgrade Plan</button>
+      <nav class="side-links" aria-label="Primary">
+        ${navButton("gallery", "inventory_2", "Filament Gallery")}
+        ${navButton("scrape", "search_check", "New Amazon Scrape")}
+        ${navButton("history", "history", "Scrape History")}
+      </nav>
+      <div class="side-footer">
+        <button class="side-link" type="button"><span class="material-symbols-outlined">settings</span>Settings</button>
+        <button class="side-link" type="button"><span class="material-symbols-outlined">help</span>Support</button>
       </div>
-    </div>
-  `;
-
-  for (const indicator of floatingResultsNavEl.querySelectorAll("[data-result-index]")) {
-    indicator.addEventListener("click", () => {
-      currentResultIndex = Number(indicator.dataset.resultIndex) || 0;
-      syncResultsCarousel();
-      scrollViewportToResults();
-    });
-  }
-
-  const nextList = floatingResultsNavEl.querySelector(".results-indicators-floating");
-  if (nextList) {
-    nextList.scrollTop = floatingResultsNavScrollTop;
-    nextList.addEventListener("scroll", () => {
-      floatingResultsNavScrollTop = nextList.scrollTop;
-    }, { passive: true });
-  }
-
-  updateFloatingMenuVisibility();
-}
-
-function renderFloatingColorNav(activeCard) {
-  if (!activeCard) {
-    floatingColorNavEl.hidden = true;
-    floatingColorNavEl.innerHTML = "";
-    floatingColorNavEl.classList.remove("is-visible");
-    floatingColorNavScrollTop = 0;
-    return;
-  }
-
-  const jumpButtons = [...activeCard.querySelectorAll("[data-color-target]")];
-  if (!jumpButtons.length) {
-    floatingColorNavEl.hidden = true;
-    floatingColorNavEl.innerHTML = "";
-    floatingColorNavEl.classList.remove("is-visible");
-    floatingColorNavScrollTop = 0;
-    return;
-  }
-
-  const previousList = floatingColorNavEl.querySelector(".color-jump-actions-floating");
-  if (previousList) {
-    floatingColorNavScrollTop = previousList.scrollTop;
-  }
-
-  const sectionTitle = activeCard.querySelector(".material-header h2")?.textContent?.trim() || "Colors";
-  floatingColorNavEl.hidden = false;
-  floatingColorNavEl.innerHTML = `
-    <div class="floating-panel-card">
-      <p class="toolbar-label">Color Navigator</p>
-      <h2>${escapeHtml(sectionTitle)}</h2>
-      <div class="color-jump-actions color-jump-actions-floating">
-        ${jumpButtons.map((button) => `
-          <button class="color-jump-button" type="button" data-color-target="${escapeHtml(button.dataset.colorTarget || "")}">
-            ${escapeHtml(button.textContent || "")}
-          </button>
-        `).join("")}
-      </div>
-    </div>
-  `;
-
-  const nextList = floatingColorNavEl.querySelector(".color-jump-actions-floating");
-  if (nextList) {
-    nextList.scrollTop = floatingColorNavScrollTop;
-    nextList.addEventListener("scroll", () => {
-      floatingColorNavScrollTop = nextList.scrollTop;
-    }, { passive: true });
-  }
-
-  updateFloatingMenuVisibility();
-}
-
-function updateColorGroupCount(groupId, visibleCount) {
-  const countEl = resultsEl.querySelector(`[data-color-count="${groupId}"]`);
-  if (countEl) {
-    countEl.textContent = `${visibleCount} result${visibleCount === 1 ? "" : "s"}`;
-  }
-}
-
-function updateColorGroupLayout(colorGroup, visibleCount) {
-  const grid = colorGroup.querySelector(".color-result-grid");
-  if (!grid) {
-    return;
-  }
-
-  grid.classList.toggle("result-grid-dense", visibleCount >= 4);
-  grid.classList.toggle("result-grid-compact", visibleCount < 4);
-}
-
-function wireShadeFilters() {
-  for (const shadeSelect of resultsEl.querySelectorAll("[data-shade-filter]")) {
-    shadeSelect.addEventListener("change", () => {
-      const groupId = shadeSelect.dataset.shadeFilter;
-      if (!groupId) {
-        return;
-      }
-
-      const colorGroup = shadeSelect.closest(".color-group");
-      if (!colorGroup) {
-        return;
-      }
-
-      const selectedShade = shadeSelect.value;
-      const cards = [...colorGroup.querySelectorAll(".result-card")];
-      let visibleCount = 0;
-
-      for (const card of cards) {
-        const matches = selectedShade === "all" || card.dataset.shadeLabel === selectedShade;
-        card.hidden = !matches;
-        if (matches) {
-          visibleCount += 1;
-        }
-      }
-
-      updateColorGroupCount(groupId, visibleCount);
-      updateColorGroupLayout(colorGroup, visibleCount);
-    });
-  }
-}
-
-function syncResultsCarousel() {
-  const panels = [...resultsEl.querySelectorAll(".result-panel")];
-  const hasResults = panels.length > 0;
-
-  resultsShellEl.hidden = !hasResults;
-  if (!hasResults) {
-    renderFloatingResultsNav([]);
-    renderFloatingColorNav(null);
-    currentResultIndex = 0;
-    updateFloatingMenuVisibility();
-    return;
-  }
-
-  if (!activeResultMaterial || !panels.some((panel) => panel.dataset.resultMaterial === activeResultMaterial)) {
-    activeResultMaterial = panels[0]?.dataset.resultMaterial || "";
-  }
-
-  if (!panels.some((panel) => panel.dataset.resultMaterial === activeResultMaterial && panel.dataset.resultGroup === activeResultGroup)) {
-    activeResultGroup = "cheapest";
-  }
-
-  let activePanel = null;
-  for (const panel of panels) {
-    const isActive = panel.dataset.resultMaterial === activeResultMaterial && panel.dataset.resultGroup === activeResultGroup;
-    panel.hidden = !isActive;
-    panel.classList.toggle("is-active", isActive);
-    if (isActive) {
-      activePanel = panel;
-    }
-  }
-
-  for (const tab of resultsEl.querySelectorAll("[data-result-material-tab]")) {
-    const isActive = tab.dataset.resultMaterialTab === activeResultMaterial;
-    tab.classList.toggle("active", isActive);
-    tab.setAttribute("aria-selected", String(isActive));
-  }
-
-  for (const tab of resultsEl.querySelectorAll("[data-result-group-tab]")) {
-    const isActive = tab.dataset.resultGroupTab === activeResultGroup;
-    const countEl = tab.querySelector("span");
-    const matchingPanel = panels.find((panel) => panel.dataset.resultMaterial === activeResultMaterial && panel.dataset.resultGroup === tab.dataset.resultGroupTab);
-    if (countEl && matchingPanel) {
-      countEl.textContent = String(matchingPanel.querySelectorAll(".product-card").length);
-    }
-    tab.classList.toggle("active", isActive);
-    tab.setAttribute("aria-selected", String(isActive));
-  }
-
-  for (const button of resultsEl.querySelectorAll("[data-result-jump-material][data-result-jump-group]")) {
-    const isActive = button.dataset.resultJumpMaterial === activeResultMaterial && button.dataset.resultJumpGroup === activeResultGroup;
-    button.classList.toggle("active", isActive);
-  }
-
-  renderFloatingResultsNav([]);
-  renderFloatingColorNav(activePanel);
-  updateFloatingMenuVisibility();
-}
-
-function moveResultsCarousel(step) {
-  const total = resultCards().length;
-  if (!total) {
-    return;
-  }
-
-  currentResultIndex = Math.max(0, Math.min(currentResultIndex + step, total - 1));
-  syncResultsCarousel();
-}
-
-function renderResultGroupNav(sections, payload) {
-  return `
-    <aside class="result-group-rail" aria-label="Result groups">
-      <div class="result-group-rail-head">
-        <span class="section-kicker">Browse groups</span>
-        <strong>Results</strong>
-      </div>
-      ${sections.map((section) => {
-        const cheapestItems = payload.resultsByMaterial[section.key] || [];
-        const bundleItems = cheapestItems.filter(isBundleItem);
-        const discountItems = payload.discountedResultsByMaterial?.[section.key] || [];
-        const groups = [
-          ["cheapest", "Cheapest", cheapestItems.length],
-          ["bundles", "Bundles", bundleItems.length],
-          ["discounts", "Discounts", discountItems.length]
-        ];
-        return `
-          <div class="result-group-block">
-            <h3>${escapeHtml(section.label)}</h3>
-            ${groups.map(([group, label, count]) => `
-              <button type="button" data-result-jump-material="${escapeHtml(section.key)}" data-result-jump-group="${escapeHtml(group)}">
-                <span>${escapeHtml(label)}</span>
-                <strong>${count}</strong>
-              </button>
-            `).join("")}
-          </div>
-        `;
-      }).join("")}
     </aside>
   `;
 }
 
-function renderResultTabs(sections, payload) {
-  const activeSection = sections.find((section) => section.key === activeResultMaterial) || sections[0];
-  const cheapestItems = activeSection ? payload.resultsByMaterial[activeSection.key] || [] : [];
-  const bundleItems = cheapestItems.filter(isBundleItem);
-  const discountItems = activeSection ? payload.discountedResultsByMaterial?.[activeSection.key] || [] : [];
-  const groupCounts = {
-    cheapest: cheapestItems.length,
-    bundles: bundleItems.length,
-    discounts: discountItems.length
-  };
-
+function navButton(view, icon, label) {
   return `
-    <div class="result-mobile-tabs">
-      <div class="tab-row material-tab-row" role="tablist" aria-label="Materials">
-        ${sections.map((section) => `
-          <button type="button" role="tab" data-result-material-tab="${escapeHtml(section.key)}">
-            ${escapeHtml(section.label)}
-          </button>
-        `).join("")}
+    <button class="side-link ${state.activeView === view ? "active" : ""}" type="button" data-view="${view}">
+      <span class="material-symbols-outlined">${icon}</span>
+      ${escapeHtml(label)}
+    </button>
+  `;
+}
+
+function topBar() {
+  const searchPlaceholder = state.activeView === "history" ? "Search logs..." : "Search filaments, colors, or SKUs...";
+  return `
+    <header class="top-shell">
+      <div class="mobile-title">
+        <span class="material-symbols-outlined">precision_manufacturing</span>
+        <strong>FilamentScrape</strong>
       </div>
-      <div class="tab-row group-tab-row" role="tablist" aria-label="Result type">
-        ${[
-          ["cheapest", "Cheapest"],
-          ["bundles", "Bundles"],
-          ["discounts", "Discounts"]
-        ].map(([group, label]) => `
-          <button type="button" role="tab" data-result-group-tab="${escapeHtml(group)}">
-            ${escapeHtml(label)}
-            <span>${groupCounts[group] || 0}</span>
-          </button>
-        `).join("")}
+      <form class="top-search" id="custom-search-form">
+        <span class="material-symbols-outlined">search</span>
+        <input id="custom-search-term" type="text" placeholder="${escapeHtml(searchPlaceholder)}" />
+        <button type="submit" title="Search"><span class="material-symbols-outlined">arrow_forward</span></button>
+      </form>
+      <div class="top-actions">
+        <button id="export-csv" type="button" ${state.exportEnabled ? "" : "disabled"} title="Export CSV"><span class="material-symbols-outlined">csv</span></button>
+        <button id="export-json" type="button" ${state.exportEnabled ? "" : "disabled"} title="Export JSON"><span class="material-symbols-outlined">file_download</span></button>
+        <button id="run-search" class="primary-action" type="button">Search All</button>
+        <button id="logout-button" type="button" title="Log out"><span class="material-symbols-outlined">logout</span></button>
       </div>
+    </header>
+  `;
+}
+
+function loginDialog() {
+  if (state.authenticated) {
+    return "";
+  }
+  return `
+    <div class="login-scrim">
+      <form id="login-form" class="login-card">
+        <div class="brand-block login-brand">
+          <div class="brand-mark"><span class="material-symbols-outlined">3d_rotation</span></div>
+          <div>
+            <strong>FilamentScrape</strong>
+            <span>Unlock shared scraper</span>
+          </div>
+        </div>
+        <label for="password">Shared app password</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+        <button type="submit"><span class="material-symbols-outlined">lock_open</span>Unlock</button>
+        <p>${escapeHtml(state.status)}</p>
+      </form>
     </div>
   `;
 }
 
-function renderResults(payload) {
-  if (!payload || typeof payload !== "object" || !payload.resultsByMaterial || !Array.isArray(payload.searchPlan)) {
-    throw new Error("The server returned an incomplete search result payload. Refresh and try again.");
-  }
-  document.body.classList.add("has-results");
-  for (const navItem of document.querySelectorAll("[data-mobile-nav]")) {
-    navItem.classList.toggle("active", navItem.dataset.mobileNav === "results");
-  }
-
-  const cheapestCount = Object.values(payload.resultsByMaterial || {}).reduce((sum, items) => sum + items.length, 0);
-  const discountedCount = Object.values(payload.discountedResultsByMaterial || {}).reduce((sum, items) => sum + items.length, 0);
-
-  metaEl.hidden = false;
-  searchedAtEl.textContent = new Date(payload.searchedAt).toLocaleString();
-  marketplaceEl.textContent = payload.marketplace;
-  cheapestCountEl.textContent = String(cheapestCount);
-  discountCountEl.textContent = String(discountedCount);
-  for (const materialButton of materialButtons) {
-    const material = materialButton.dataset.material;
-    const count = material ? (payload.resultsByMaterial?.[material]?.length || 0) : 0;
-    const countEl = materialButton.querySelector("strong");
-    if (countEl) {
-      countEl.textContent = String(count);
-    }
-  }
-  const sections = payload.searchPlan.length
-    ? payload.searchPlan
-    : Object.keys(payload.resultsByMaterial).map((key) => ({ key, label: key }));
-  if (!activeResultMaterial || !sections.some((section) => section.key === activeResultMaterial)) {
-    activeResultMaterial = sections[0]?.key || "";
-  }
-  activeResultGroup = ["cheapest", "bundles", "discounts"].includes(activeResultGroup) ? activeResultGroup : "cheapest";
-
-  const resultPanels = sections.map((section) => {
-    const cheapestItems = payload.resultsByMaterial[section.key] || [];
-    const cheapestSection = sectionForMaterial(section, cheapestItems);
-    const bundleSection = bundleSectionForMaterial(section, cheapestItems);
-    const discountedSection = discountSectionForMaterial(section, payload.discountedResultsByMaterial?.[section.key] || []);
-    return `${cheapestSection}${bundleSection}${discountedSection}`;
-  }).join("");
-
-  resultsEl.innerHTML = `
-    <div class="result-browser">
-      <div class="result-main">
-        ${renderResultTabs(sections, payload)}
-        <div class="result-panel-stack">
-          ${resultPanels}
+function galleryView() {
+  const counts = materialCounts();
+  const groups = groupCounts();
+  return `
+    <div class="gallery-layout">
+      <aside class="filter-panel">
+        <div class="filter-head"><h2>Filters</h2><button type="button" data-reset-filters>Reset</button></div>
+        <div class="filter-section">
+          <h3>Material</h3>
+          ${MATERIALS.map((material) => `
+            <button class="check-row ${state.activeMaterial === material ? "checked" : ""}" type="button" data-material-filter="${material}">
+              <span></span><strong>${material}</strong><em>${counts[material] || 0}</em>
+            </button>
+          `).join("")}
         </div>
-      </div>
+        <div class="filter-section">
+          <h3>Brand</h3>
+          <select><option>All Brands</option><option>Elegoo</option><option>Sunlu</option><option>Overture</option><option>Polymaker</option></select>
+        </div>
+        <div class="filter-section">
+          <div class="range-label"><h3>Price Range</h3><span>$12 - $35</span></div>
+          <div class="range-track"><span></span><i></i><b></b></div>
+          <div class="range-inputs"><input value="$12.00" readonly /><input value="$35.00" readonly /></div>
+        </div>
+        <div class="filter-section">
+          <h3>Colors</h3>
+          <div class="color-filter-row">
+            ${["white", "black", "gray", "red", "blue", "green", "yellow", "orange", "multi", "transparent"].map((color) => `<button class="filter-dot color-${color}" type="button"></button>`).join("")}
+          </div>
+        </div>
+      </aside>
+      <section class="gallery-main">
+        <div class="gallery-head">
+          <div>
+            <h1>Filament Deals</h1>
+            <p>${escapeHtml(currentResultsLabel())}</p>
+          </div>
+          <label class="sort-control">Sort by:
+            <select><option>Highest Discount %</option><option>Price Low to High</option></select>
+          </label>
+        </div>
+        <div class="group-tabs">
+          ${groupTab("deals", "Deals", groups.deals)}
+          ${groupTab("bundles", "Bundles", groups.bundles)}
+          ${groupTab("discounts", "Discounts", groups.discounts)}
+        </div>
+        ${productGrid()}
+      </section>
     </div>
   `;
-  wireShadeFilters();
-  currentResultIndex = 0;
-  syncResultsCarousel();
-  renderWarnings(payload.warnings || []);
-  setExportEnabled(true);
+}
+
+function groupTab(group, label, count) {
+  return `<button class="${state.activeGroup === group ? "active" : ""}" type="button" data-group-filter="${group}">${escapeHtml(label)} <span>${count}</span></button>`;
+}
+
+function productGrid() {
+  const items = visibleItems();
+  if (!state.payload) {
+    return `<div class="empty-state"><h2>No cached gallery yet</h2><p>Start a scrape or unlock the app to load the latest cached results.</p></div>`;
+  }
+  if (!items.length) {
+    return `<div class="empty-state"><h2>No matching filament deals</h2><p>Try another material or result group.</p></div>`;
+  }
+  return `<div class="product-grid">${items.map(productCard).join("")}</div>`;
+}
+
+function productCard(item, index) {
+  const color = detectColorProfile(item);
+  const material = detectMaterial(item);
+  const brand = detectBrand(item);
+  const imageUrl = safeImageUrl(item.imageUrl);
+  const isBundle = isBundleItem(item);
+  const badge = item.hasDiscount
+    ? `${item.discountPercent != null ? `${item.discountPercent}%` : "Deal"} OFF`
+    : isBundle
+      ? "BUNDLE DEAL"
+      : "";
+  return `
+    <article class="filament-card">
+      <div class="card-media">
+        ${badge ? `<span class="deal-badge ${isBundle ? "blue" : ""}">${escapeHtml(badge)}</span>` : ""}
+        <div class="spool-fallback color-${escapeHtml(color.key)}"></div>
+        ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.remove()" />` : ""}
+        <span class="swatch color-${escapeHtml(color.key)}"></span>
+      </div>
+      <div class="card-body">
+        <div class="card-meta"><span>${escapeHtml(material)}</span><em>${escapeHtml(brand)}</em></div>
+        <h3><a href="${escapeHtml(safeAmazonUrl(item.url))}" target="_blank" rel="noreferrer">${escapeHtml(item.title || `Filament result ${index + 1}`)}</a></h3>
+        <div class="price-block">
+          <small>Total Delivered</small>
+          <strong>${money(item.totalValue ?? item.priceValue, item.currency)}</strong>
+          <span>${money(item.pricePerKg, item.currency)}/kg</span>
+        </div>
+        <a class="amazon-link" href="${escapeHtml(safeAmazonUrl(item.url))}" target="_blank" rel="noreferrer">View on Amazon <span class="material-symbols-outlined">open_in_new</span></a>
+      </div>
+    </article>
+  `;
+}
+
+function scrapeView() {
+  const percent = Math.max(0, Math.min(100, Number(state.progress?.percent) || 0));
+  const isActive = Boolean(state.progress?.running || state.searching);
+  return `
+    <div class="scrape-stage">
+      <div class="scrape-copy">
+        <h1>
+          <span class="desktop-title">${isActive ? "Extraction in Progress" : "Initialize Data Extraction"}</span>
+          <span class="mobile-title-text">${isActive ? "Scrape Active" : "New Scrape Task"}</span>
+        </h1>
+        <p>Enter an Amazon search URL, specific ASINs, or general keywords to begin scraping filament pricing, availability, and specifications.</p>
+      </div>
+      <form id="scrape-form" class="scrape-card">
+        <label for="scrape-target">Target URL or Keywords</label>
+        <div class="scrape-input">
+          <span class="material-symbols-outlined">link</span>
+          <textarea id="scrape-target" rows="4" placeholder="https://amazon.com/dp/B08X...&#10;B09Z1X...&#10;Keywords..."></textarea>
+        </div>
+        <div class="scrape-options">
+          <div>
+            <span class="material-symbols-outlined">layers</span>
+            <strong>Deep Scrape</strong>
+            <small>Extract variations and product metadata</small>
+            <i></i>
+          </div>
+          <div>
+            <span class="material-symbols-outlined">speed</span>
+            <strong>Throttle Speed</strong>
+            <select><option>Moderate</option><option>Stealth</option></select>
+          </div>
+        </div>
+        <button class="scrape-submit" type="submit" ${state.searching ? "disabled" : ""}>
+          <span class="material-symbols-outlined">${state.searching ? "sync" : "rocket_launch"}</span>
+          ${state.searching ? "Initializing..." : "Start Scrape Sequence"}
+        </button>
+      </form>
+      <section class="progress-console ${isActive ? "active" : ""}">
+        <header><strong><span class="material-symbols-outlined">sync</span> Scrape Active</strong><span>Task ${activeSearchJobId ? `#${activeSearchJobId.slice(-4)}` : "#4892"}</span></header>
+        <div class="terminal">
+          <p>&gt; ${escapeHtml(state.progress?.message || "Waiting for scrape command...")}</p>
+          <p>&gt; Active material: ${escapeHtml(state.progress?.activeMaterial || "Queued")}</p>
+          <p class="ok">&gt; Cached results: ${state.payload ? "available" : "pending"}</p>
+        </div>
+        <div class="progress-label"><span>Overall Progress</span><strong>${Math.round(percent)}%</strong></div>
+        <div class="progress-track"><span style="width: ${percent}%"></span></div>
+      </section>
+    </div>
+  `;
+}
+
+function historyView() {
+  const total = state.history.reduce((sum, item) => sum + (Number(item.resultCount) || 0), 0);
+  return `
+    <section class="history-stage">
+      <div class="history-head">
+        <div><h1>Scrape History</h1><p>Log of recent automated material discovery tasks.</p></div>
+        <span>Total Tasks: <strong>${total || state.history.length}</strong></span>
+      </div>
+      <div class="history-table">
+        <div class="history-row header"><span>Date & Time</span><span>Search Term / Parameter</span><span>Results Found</span><span>Action</span></div>
+        ${(state.history.length ? state.history : []).map(historyRow).join("") || `<div class="empty-state"><h2>No scrape history yet</h2><p>Run a scrape to populate this log.</p></div>`}
+      </div>
+      <div class="mobile-history-list">
+        ${(state.history.length ? state.history : []).map(mobileHistoryCard).join("") || `<div class="empty-state"><h2>No scrape history yet</h2><p>Run a scrape to populate this log.</p></div>`}
+      </div>
+    </section>
+  `;
+}
+
+function historyLabel(item) {
+  return Array.isArray(item.labels) && item.labels.length ? item.labels.join(", ") : "Saved scrape";
+}
+
+function historyDate(item) {
+  if (!item.searchedAt) {
+    return ["Unknown", ""];
+  }
+  const date = new Date(item.searchedAt);
+  return [date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }), date.toLocaleTimeString()];
+}
+
+function historyRow(item) {
+  const [date, time] = historyDate(item);
+  const label = historyLabel(item);
+  const material = Array.isArray(item.labels) && item.labels[0] ? item.labels[0] : "RUN";
+  const hasResults = Number(item.resultCount) > 0;
+  return `
+    <button class="history-row" type="button" data-history-job-id="${escapeHtml(item.jobId)}">
+      <span><strong>${escapeHtml(date)}</strong><small>${escapeHtml(time)}</small></span>
+      <span><em>${escapeHtml(material)}</em>${escapeHtml(label)}</span>
+      <span><b class="${hasResults ? "" : "muted"}">${item.resultCount || 0}</b></span>
+      <span>${hasResults ? "View Results" : "No Data"}</span>
+    </button>
+  `;
+}
+
+function mobileHistoryCard(item) {
+  const [date, time] = historyDate(item);
+  const hasResults = Number(item.resultCount) > 0;
+  return `
+    <button class="mobile-history-card" type="button" data-history-job-id="${escapeHtml(item.jobId)}">
+      <div><strong>"${escapeHtml(historyLabel(item))}"</strong><span>${escapeHtml(date)} • ${escapeHtml(time)}</span></div>
+      <b class="${hasResults ? "" : "muted"}">${item.resultCount || 0} RES</b>
+      <em>${hasResults ? "VIEW RESULTS" : "NO RESULTS"} ${hasResults ? "→" : ""}</em>
+    </button>
+  `;
+}
+
+function mobileBottomNav() {
+  return `
+    <nav class="mobile-bottom-nav">
+      ${mobileNavButton("gallery", "grid_view", "Gallery")}
+      ${mobileNavButton("scrape", "search_insights", "Scrape")}
+      ${mobileNavButton("history", "history", "History")}
+    </nav>
+  `;
+}
+
+function mobileNavButton(view, icon, label) {
+  return `
+    <button class="${state.activeView === view ? "active" : ""}" type="button" data-view="${view}">
+      <span class="material-symbols-outlined">${icon}</span>
+      ${escapeHtml(label)}
+    </button>
+  `;
+}
+
+function bindEvents() {
+  for (const button of app.querySelectorAll("[data-view]")) {
+    button.addEventListener("click", () => {
+      state.activeView = button.dataset.view;
+      render();
+    });
+  }
+
+  app.querySelector("#custom-search-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const term = app.querySelector("#custom-search-term")?.value.trim();
+    if (term) {
+      void startSearch({ customTerm: term });
+    }
+  });
+
+  app.querySelector("#scrape-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const term = app.querySelector("#scrape-target")?.value.trim();
+    void startSearch(term ? { customTerm: term } : { materials: MATERIALS });
+  });
+
+  app.querySelector("#run-search")?.addEventListener("click", () => {
+    void startSearch({ materials: MATERIALS });
+  });
+
+  app.querySelector("#logout-button")?.addEventListener("click", async () => {
+    await apiFetch("/api/logout", { method: "POST" });
+    state.authenticated = false;
+    state.status = "Logged out.";
+    render();
+  });
+
+  app.querySelector("#export-csv")?.addEventListener("click", () => window.location.assign("/api/export.csv"));
+  app.querySelector("#export-json")?.addEventListener("click", () => window.location.assign("/api/export.json"));
+
+  app.querySelector("#login-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const password = app.querySelector("#password")?.value || "";
+    await login(password);
+  });
+
+  for (const button of app.querySelectorAll("[data-material-filter]")) {
+    button.addEventListener("click", () => {
+      state.activeMaterial = state.activeMaterial === button.dataset.materialFilter ? "all" : button.dataset.materialFilter;
+      render();
+    });
+  }
+
+  app.querySelector("[data-reset-filters]")?.addEventListener("click", () => {
+    state.activeMaterial = "all";
+    state.activeGroup = "deals";
+    render();
+  });
+
+  for (const button of app.querySelectorAll("[data-group-filter]")) {
+    button.addEventListener("click", () => {
+      state.activeGroup = button.dataset.groupFilter || "deals";
+      render();
+    });
+  }
+
+  for (const button of app.querySelectorAll("[data-history-job-id]")) {
+    button.addEventListener("click", () => {
+      void loadLatestResults(button.dataset.historyJobId);
+    });
+  }
+}
+
+async function login(password) {
+  state.status = "Checking password...";
+  render();
+  try {
+    const response = await apiFetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password })
+    });
+    const payload = await readJsonResponse(response);
+    if (!response.ok) {
+      throw new Error(payload.error || payload.message || "Login failed");
+    }
+    state.authenticated = true;
+    state.status = "Unlocked.";
+    await initializeAuthenticatedApp();
+  } catch (error) {
+    state.status = error.message;
+    render();
+  }
 }
 
 async function updateSessionState() {
   try {
     const response = await apiFetch("/admin/session-status");
     if (response.status === 401) {
-      sessionStateEl.textContent = "Locked";
-      loginForm.hidden = false;
+      state.authenticated = false;
       return false;
     }
-
     const payload = await readJsonResponse(response);
-    sessionStateEl.textContent = payload.status;
-    loginForm.hidden = true;
-    if (!["ready", "busy"].includes(payload.status)) {
-      renderWarnings([payload.message]);
-    }
+    state.authenticated = true;
+    state.status = payload.status || "Ready.";
     return true;
   } catch (error) {
-    sessionStateEl.textContent = "Unknown";
-    renderWarnings([error.message]);
+    state.status = error.message;
     return false;
-  }
-}
-
-async function login(password) {
-  const response = await apiFetch("/api/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password })
-  });
-  const payload = await readJsonResponse(response);
-  if (!response.ok) {
-    throw new Error(payload.error || payload.message || "Login failed");
   }
 }
 
 async function loadSearchHistory() {
   const response = await apiFetch("/api/search-history");
   if (response.status === 401) {
-    historyEl.hidden = true;
+    state.history = [];
     return;
   }
   const payload = await readJsonResponse(response);
   if (!response.ok) {
     throw new Error(payload.error || payload.message || "Could not load recent searches");
   }
-  renderHistory(payload.items || []);
+  state.history = payload.items || [];
 }
 
 async function loadLatestResults(jobId = null) {
   const response = await apiFetch(jobId ? `/api/latest-results?jobId=${encodeURIComponent(jobId)}` : "/api/latest-results");
+  if (response.status === 401) {
+    state.authenticated = false;
+    render();
+    return;
+  }
   const payload = await readJsonResponse(response);
   if (!response.ok) {
-    throw new Error(payload.error || payload.message || "Could not load the latest results");
+    state.exportEnabled = false;
+    render();
+    return;
   }
-  selectedHistoryJobId = payload.jobId || jobId || null;
-  renderResults(payload);
-  await loadSearchHistory();
-  statusEl.textContent = "Search complete.";
+  state.payload = payload;
+  state.selectedHistoryJobId = payload.jobId || jobId || null;
+  state.exportEnabled = true;
+  state.activeView = "gallery";
+  await loadSearchHistory().catch(() => {});
+  render();
+}
+
+function stopProgressPolling() {
+  if (progressTimer) {
+    window.clearInterval(progressTimer);
+    progressTimer = null;
+  }
 }
 
 async function refreshSearchProgress() {
   try {
     const response = await apiFetch("/api/search-status");
     if (response.status === 401) {
-      stopSearchProgressPolling();
-      progressCardEl.hidden = true;
+      stopProgressPolling();
+      state.authenticated = false;
+      render();
       return;
     }
-
     const payload = await readJsonResponse(response);
-    renderSearchProgress(payload);
+    state.progress = payload;
+    state.searching = Boolean(payload.running);
 
     if (!payload.running) {
-      stopSearchProgressPolling();
-
+      stopProgressPolling();
       if (payload.phase === "error" && payload.jobId === activeSearchJobId) {
         resultFetchPending = false;
-        statusEl.textContent = payload.message;
-        renderWarnings([payload.message]);
-        setLockedState(false);
+        state.status = payload.message || "Search failed.";
       }
-
-      if (
-        resultFetchPending &&
-        activeSearchJobId &&
-        payload.latestPayloadJobId === activeSearchJobId
-      ) {
+      if (resultFetchPending && activeSearchJobId && payload.latestPayloadJobId === activeSearchJobId) {
         resultFetchPending = false;
         await loadLatestResults();
-        await updateSessionState();
-        setLockedState(false);
+      } else {
+        render();
       }
+    } else {
+      render();
     }
   } catch (error) {
-    if (!resultFetchPending) {
-      renderWarnings([error.message]);
-    }
+    state.status = error.message;
+    render();
   }
 }
 
-function startSearchProgressPolling() {
-  stopSearchProgressPolling();
+function startProgressPolling() {
+  stopProgressPolling();
   void refreshSearchProgress();
-  searchProgressTimer = window.setInterval(() => {
+  progressTimer = window.setInterval(() => {
     void refreshSearchProgress();
   }, 1500);
 }
 
 async function startSearch(searchRequest) {
-  setLockedState(true);
-  setExportEnabled(false);
-  clearCurrentResultsForSearch(searchRequest);
-  statusEl.textContent = "Searching Amazon. The shared browser session in the container is collecting prices now.";
-  renderSearchProgress({
-    percent: 1,
-    message: "Starting search…",
-    activeMaterial: null,
-    running: true
-  });
+  state.activeView = "scrape";
+  state.searching = true;
+  state.exportEnabled = false;
+  state.progress = { percent: 1, message: "Starting scrape sequence...", running: true };
+  render();
 
   try {
     const response = await apiFetch("/api/search", {
@@ -1210,160 +731,41 @@ async function startSearch(searchRequest) {
     });
     const payload = await readJsonResponse(response);
     if (response.status === 401) {
-      loginForm.hidden = false;
+      state.authenticated = false;
       throw new Error("Enter the shared password to continue.");
     }
     if (!response.ok) {
       throw new Error(payload.message || payload.error || "Search failed");
     }
-
     activeSearchJobId = payload.jobId;
     resultFetchPending = true;
-    renderWarnings([]);
-    startSearchProgressPolling();
+    startProgressPolling();
   } catch (error) {
     resultFetchPending = false;
-    setLockedState(false);
-    statusEl.textContent = error.message;
-    renderWarnings([error.message]);
-    await refreshSearchProgress();
+    state.searching = false;
+    state.status = error.message;
+    state.progress = { percent: 0, message: error.message, running: false };
+    render();
   }
 }
 
-loginForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  statusEl.textContent = "Checking password...";
-
-  try {
-    await login(passwordInput.value);
-    passwordInput.value = "";
-    statusEl.textContent = "Unlocked.";
-    loginForm.hidden = true;
-    await updateSessionState();
-    await loadSearchHistory();
-    await loadLatestResults().catch(() => {});
-  } catch (error) {
-    statusEl.textContent = error.message;
-  }
-});
-
-button.addEventListener("click", () => {
-  void startSearch({ materials: ["PLA", "PETG", "ABS", "TPU", "ASA"] });
-});
-
-if (mobileSearchAllButton) {
-  mobileSearchAllButton.addEventListener("click", () => {
-    for (const navItem of document.querySelectorAll("[data-mobile-nav]")) {
-      navItem.classList.toggle("active", navItem.dataset.mobileNav === "search");
-    }
-    void startSearch({ materials: ["PLA", "PETG", "ABS", "TPU", "ASA"] });
+async function initializeAuthenticatedApp() {
+  await loadSearchHistory().catch(() => {});
+  await loadLatestResults().catch(() => {
+    state.activeView = "scrape";
+    render();
   });
+  await refreshSearchProgress().catch(() => {});
 }
-
-for (const mobileNavItem of document.querySelectorAll("[data-mobile-nav]")) {
-  mobileNavItem.addEventListener("click", () => {
-    for (const navItem of document.querySelectorAll("[data-mobile-nav]")) {
-      navItem.classList.toggle("active", navItem === mobileNavItem);
-    }
-  });
-}
-
-for (const materialButton of materialButtons) {
-  materialButton.addEventListener("click", () => {
-    const material = materialButton.dataset.material;
-    if (document.body.classList.contains("has-results") && material) {
-      activeResultMaterial = material;
-      activeResultGroup = "cheapest";
-      for (const button of materialButtons) {
-        button.classList.toggle("active", button === materialButton);
-      }
-      syncResultsCarousel();
-      return;
-    }
-    void startSearch({ materials: [material] });
-  });
-}
-
-customSearchForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const customTerm = customSearchInput.value.trim();
-  if (!customTerm) {
-    statusEl.textContent = "Enter a custom search term first.";
-    return;
-  }
-
-  void startSearch({ customTerm });
-});
-
-logoutButton.addEventListener("click", async () => {
-  await apiFetch("/api/logout", { method: "POST" });
-  loginForm.hidden = false;
-  sessionStateEl.textContent = "Locked";
-  historyEl.hidden = true;
-  statusEl.textContent = "Logged out.";
-});
-exportCsvButton.addEventListener("click", () => openDownload("/api/export.csv"));
-exportJsonButton.addEventListener("click", () => openDownload("/api/export.json"));
-resultsEl.addEventListener("click", (event) => {
-  const materialTab = event.target.closest("[data-result-material-tab]");
-  if (materialTab) {
-    activeResultMaterial = materialTab.dataset.resultMaterialTab || activeResultMaterial;
-    syncResultsCarousel();
-    return;
-  }
-
-  const groupTab = event.target.closest("[data-result-group-tab]");
-  if (groupTab) {
-    activeResultGroup = groupTab.dataset.resultGroupTab || activeResultGroup;
-    syncResultsCarousel();
-    return;
-  }
-
-  const groupJump = event.target.closest("[data-result-jump-material][data-result-jump-group]");
-  if (groupJump) {
-    activeResultMaterial = groupJump.dataset.resultJumpMaterial || activeResultMaterial;
-    activeResultGroup = groupJump.dataset.resultJumpGroup || activeResultGroup;
-    syncResultsCarousel();
-    scrollViewportToResults();
-    return;
-  }
-
-  const jumpButton = event.target.closest("[data-color-target]");
-  if (!jumpButton) {
-    return;
-  }
-
-  const target = document.getElementById(jumpButton.dataset.colorTarget || "");
-  if (!target) {
-    return;
-  }
-
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
-});
-floatingColorNavEl.addEventListener("click", (event) => {
-  const jumpButton = event.target.closest("[data-color-target]");
-  if (!jumpButton) {
-    return;
-  }
-
-  const target = document.getElementById(jumpButton.dataset.colorTarget || "");
-  if (!target) {
-    return;
-  }
-
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
-});
-window.addEventListener("scroll", updateFloatingMenuVisibility, { passive: true });
-window.addEventListener("resize", updateFloatingMenuVisibility);
 
 async function initializeApp() {
+  render();
   const unlocked = await updateSessionState();
   if (unlocked) {
-    await loadSearchHistory().catch(() => {});
-    await loadLatestResults().catch(() => {});
+    await initializeAuthenticatedApp();
+  } else {
+    render();
   }
-  await refreshSearchProgress();
-  updateFloatingMenuVisibility();
 }
 
 void initializeApp();
