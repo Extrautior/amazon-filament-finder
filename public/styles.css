@@ -655,6 +655,13 @@ a {
   line-height: 1;
 }
 
+.price-block em {
+  color: var(--primary);
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  font-style: normal;
+}
+
 .price-block span {
   justify-self: start;
   padding: 4px 6px;
@@ -1292,6 +1299,10 @@ button.history-row:hover {
   .price-block small,
   .price-block span {
     display: none;
+  }
+
+  .price-block em {
+    font-size: 0.72rem;
   }
 
   .price-block strong {

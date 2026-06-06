@@ -1,6 +1,8 @@
 const MATERIALS = ["PLA", "PETG", "ABS", "TPU", "ASA"];
+const USD_TO_ILS_RATE = 2.8019;
 
 const COLOR_DEFINITIONS = [
+  { key: "multi", label: "Multi", pattern: /\brainbow\b|\bmulti(?:-|\s)?color\b|\bcolor\s?change\b|\bdual\s+color\b|\btri(?:-|\s)?color\b|\btricolor\b|\bco-?extrusion\b|\bgradient\b/i },
   { key: "black", label: "Black", pattern: /\bblack\b|\bjet\s+black\b|\bcharcoal\b|\bonyx\b/i },
   { key: "white", label: "White", pattern: /\bwhite\b|\bivory\b|\bcream\b/i },
   { key: "gray", label: "Gray", pattern: /\bgray\b|\bgrey\b|\bsilver\b|\bspace\s+gray\b/i },
@@ -12,8 +14,7 @@ const COLOR_DEFINITIONS = [
   { key: "purple", label: "Purple", pattern: /\bpurple\b|\bviolet\b|\blavender\b/i },
   { key: "pink", label: "Pink", pattern: /\bpink\b|\brose\b/i },
   { key: "brown", label: "Brown", pattern: /\bbrown\b|\bbronze\b|\bwood\b|\bchocolate\b/i },
-  { key: "transparent", label: "Clear", pattern: /\bclear\b|\btransparent\b|\btranslucent\b/i },
-  { key: "multi", label: "Multi", pattern: /\brainbow\b|\bmulti(?:-|\s)?color\b|\bgalaxy\b|\bdual\s+color\b|\btri(?:-|\s)?color\b/i }
+  { key: "transparent", label: "Clear", pattern: /\bclear\b|\btransparent\b|\btranslucent\b/i }
 ];
 
 function readPreference(key) {
@@ -114,6 +115,13 @@ function money(value, currency = "$") {
   return ["$", "€", "£", "₪"].includes(currency) ? `${currency}${amount}` : `${amount} ${currency}`;
 }
 
+function shekelMoneyFromUsd(value) {
+  if (value == null || Number.isNaN(Number(value))) {
+    return "";
+  }
+  return money(Number(value) * USD_TO_ILS_RATE, "₪");
+}
+
 function slugify(value) {
   return String(value || "")
     .trim()
@@ -145,6 +153,12 @@ function safeImageUrl(value) {
 }
 
 function detectColorProfile(item) {
+  const title = String(item?.title || "");
+  const multiMatch = COLOR_DEFINITIONS.find((entry) => entry.key === "multi" && entry.pattern.test(title));
+  if (multiMatch) {
+    return { key: multiMatch.key, label: multiMatch.label };
+  }
+
   if (item?.colorKey || item?.colorLabel) {
     return {
       key: item.colorKey || slugify(item.colorLabel),
@@ -152,7 +166,6 @@ function detectColorProfile(item) {
     };
   }
 
-  const title = String(item?.title || "");
   const match = COLOR_DEFINITIONS.find((entry) => entry.pattern.test(title));
   return match ? { key: match.key, label: match.label } : { key: "unknown", label: "Color" };
 }
@@ -487,6 +500,9 @@ function productCard(item, index) {
   const brand = detectBrand(item);
   const imageUrl = safeImageUrl(item.imageUrl);
   const isBundle = isBundleItem(item);
+  const totalPrice = item.totalValue ?? item.priceValue;
+  const totalIls = item.currency === "$" || !item.currency ? shekelMoneyFromUsd(totalPrice) : "";
+  const kgIls = item.currency === "$" || !item.currency ? shekelMoneyFromUsd(item.pricePerKg) : "";
   const badge = item.hasDiscount
     ? `${item.discountPercent != null ? `${item.discountPercent}%` : "Deal"} OFF`
     : isBundle
@@ -505,8 +521,9 @@ function productCard(item, index) {
         <h3><a href="${escapeHtml(safeAmazonUrl(item.url))}" target="_blank" rel="noreferrer">${escapeHtml(item.title || `Filament result ${index + 1}`)}</a></h3>
         <div class="price-block">
           <small>Total Delivered</small>
-          <strong>${money(item.totalValue ?? item.priceValue, item.currency)}</strong>
-          <span>${money(item.pricePerKg, item.currency)}/kg</span>
+          <strong>${money(totalPrice, item.currency)}</strong>
+          ${totalIls ? `<em>${totalIls} ILS</em>` : ""}
+          <span>${money(item.pricePerKg, item.currency)}/kg${kgIls ? ` · ${kgIls}/kg` : ""}</span>
         </div>
         <a class="amazon-link" href="${escapeHtml(safeAmazonUrl(item.url))}" target="_blank" rel="noreferrer">View on Amazon <span class="material-symbols-outlined">open_in_new</span></a>
       </div>
