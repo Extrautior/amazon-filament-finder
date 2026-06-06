@@ -16,6 +16,22 @@ const COLOR_DEFINITIONS = [
   { key: "multi", label: "Multi", pattern: /\brainbow\b|\bmulti(?:-|\s)?color\b|\bgalaxy\b|\bdual\s+color\b|\btri(?:-|\s)?color\b/i }
 ];
 
+function readPreference(key) {
+  try {
+    return window.localStorage?.getItem(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writePreference(key, value) {
+  try {
+    window.localStorage?.setItem(key, value);
+  } catch {
+    // Preference storage is optional.
+  }
+}
+
 const state = {
   activeView: "scrape",
   activeMaterial: "all",
@@ -25,6 +41,7 @@ const state = {
   sortMode: "price-asc",
   page: 1,
   pageSize: 24,
+  sidebarCollapsed: readPreference("filamentSidebarCollapsed") === "true",
   authenticated: false,
   exportEnabled: false,
   history: [],
@@ -277,7 +294,7 @@ function currentResultsLabel() {
 }
 
 function render() {
-  app.className = `app-shell view-${state.activeView}`;
+  app.className = `app-shell view-${state.activeView} ${state.sidebarCollapsed ? "sidebar-collapsed" : ""}`;
   app.innerHTML = `
     ${desktopSidebar()}
     <main class="workspace">
@@ -338,6 +355,9 @@ function topBar() {
   const searchPlaceholder = state.activeView === "history" ? "Search logs..." : "Filter scraped filaments...";
   return `
     <header class="top-shell">
+      <button class="sidebar-toggle" id="sidebar-toggle" type="button" title="${state.sidebarCollapsed ? "Show menu" : "Hide menu"}">
+        <span class="material-symbols-outlined">${state.sidebarCollapsed ? "menu_open" : "menu"}</span>
+      </button>
       <div class="mobile-title">
         <span class="material-symbols-outlined">precision_manufacturing</span>
         <strong>FilamentScrape</strong>
@@ -614,6 +634,12 @@ function mobileNavButton(view, icon, label) {
 }
 
 function bindEvents() {
+  app.querySelector("#sidebar-toggle")?.addEventListener("click", () => {
+    state.sidebarCollapsed = !state.sidebarCollapsed;
+    writePreference("filamentSidebarCollapsed", String(state.sidebarCollapsed));
+    render();
+  });
+
   for (const button of app.querySelectorAll("[data-view]")) {
     button.addEventListener("click", () => {
       state.activeView = button.dataset.view;
